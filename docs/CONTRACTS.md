@@ -1,12 +1,12 @@
-# 并行实现的接口契约（已完成轮次记录）
+# Interface contracts for parallel implementation (completed rounds)
 
-> 状态：task-4 ~ task-8 已全部完成并合入；本文件保留为接口参考。
+> Status: task-4 through task-8 are all complete and merged; this file is retained as interface reference.
 
-# 并行实现的接口契约
+# Interface contracts for parallel implementation
 
-本文件冻结并行开发所依赖的公共签名。实现者不得修改其他任务的签名；需要变更时先通知 lead。
+This file freezes the public signatures that parallel development depends on. Implementers must not change signatures owned by other tasks; notify the lead before requesting a change.
 
-## 已有公共类型（pi-ai，`io.github.whywood.deepdeep.sdk.ai`）
+## Existing public types (pi-ai, `io.github.whywood.deepdeep.sdk.ai`)
 
 ```kotlin
 val PiJson: Json
@@ -16,7 +16,7 @@ sealed interface Content            // TextContent/ThinkingContent/ImageContent/
 sealed interface AssistantMessageEvent
 sealed interface MessageContent     // PlainTextContent/BlockContent
 
-data class Model(...)               // catalog 里的 chat 模型
+data class Model(...)               // a chat model from the catalog
 data class Tool(name, description, parameters: JsonObject, constrainedSampling: JsonValue?)
 class TranscriptContext(val messages: List<Message>)
 class AssistantMessageEventStream   // push/end/events: Flow/result()
@@ -26,19 +26,19 @@ data class StreamOptions(...)       // apiKey/env/headers/onPayload/onResponse/t
 data class SimpleStreamOptions(val stream: StreamOptions, val toolChoice, val reasoning, val deferred, val thinkingBudgets)
 ```
 
-## task-4（HTTP/流式底层）暴露
+## task-4 (HTTP/streaming foundation) exposure
 
 ```kotlin
 // io.github.whywood.deepdeep.sdk.ai.http
 class SseEvent(val event: String?, val data: String, val id: String?, val retry: Long?)
 class SseParser(source: BufferedSource) { suspend fun next(): SseEvent? ; fun close() }
 
-// io.github.whywood.deepdeep.sdk.ai.http（okhttpMain source set）
+// io.github.whywood.deepdeep.sdk.ai.http (okhttpMain source set)
 fun okHttpTransport(client: OkHttpClient = defaultClient()): HttpTransport
 
 // io.github.whywood.deepdeep.sdk.ai.utils
 object PartialJson {
-    fun parse(text: String): JsonValue?              // 不完整返回已解析部分/null
+    fun parse(text: String): JsonValue?              // incomplete input returns the parsed part/null
     fun repair(text: String): String
     fun parseToolCallArguments(json: String?): ToolArguments   // arguments: JsonObject + argumentsError: String?
 }
@@ -57,12 +57,12 @@ object ProviderErrors {
 }
 ```
 
-`OkHttpTransport` 语义：SSE 不缓冲整包；HTTP 非 2xx 也返回 `HttpResponse`（由上层读 body 生成错误）；取消通过协程 cancel 抛出即可（上层捕获转 aborted）；代理从 `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` 环境变量读取（JVM），Android 用系统默认 ProxySelector。
+`OkHttpTransport` semantics: SSE is not buffered as a whole packet; non-2xx HTTP still returns an `HttpResponse` (the upper layer reads the body to produce an error); cancellation can simply throw via coroutine cancel (the upper layer catches it and converts to aborted); proxies are read from `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` environment variables (JVM), while Android uses the system default ProxySelector.
 
-## task-5（transcript/校验/估算）暴露
+## task-5 (transcript/validation/estimation) exposure
 
 ```kotlin
-// io.github.whywood.deepdeep.sdk.ai.utils.Transcript（顶层函数避免与类名冲突）
+// io.github.whywood.deepdeep.sdk.ai.utils.Transcript (top-level functions avoid clashing with the class name)
 fun createInitialSystemMessage(systemPrompt: String?, tools: List<Tool>?): SystemMessage?
 fun normalizeContext(context: Context): TranscriptContext
 fun getInitialSystemMessage(messages: List<Message>): SystemMessage?
@@ -98,9 +98,9 @@ fun isContextOverflow(message: AssistantMessage, contextWindow: Long? = null): B
 fun isRecoverableLength(message: AssistantMessage, desiredMaxOutput: Long): Boolean
 ```
 
-校验器要求：完整移植上游 `utils/validation.ts` 的 JSON Schema 子集（type/properties/required/additionalProperties/items/enum/const/anyOf/oneOf/allOf/nullable/整数与数字强转），错误消息逐字对齐：`Validation failed for tool "x":\n  - /path: message\n\nReceived arguments:\n{...}`；`argumentsError` 优先：`Invalid arguments for tool "x": <argumentsError>`。
+Validator requirements: port upstream `utils/validation.ts`'s JSON Schema subset in full (type/properties/required/additionalProperties/items/enum/const/anyOf/oneOf/allOf/nullable/integer-and-number coercion), with error messages aligned verbatim: `Validation failed for tool "x":\n  - /path: message\n\nReceived arguments:\n{...}`; `argumentsError` takes precedence: `Invalid arguments for tool "x": <argumentsError>`.
 
-## task-6（openai-completions）暴露
+## task-6 (openai-completions) exposure
 
 ```kotlin
 // io.github.whywood.deepdeep.sdk.ai.api
@@ -109,9 +109,9 @@ fun openAICompletionsApi(): ApiProvider
 //              suspend fun streamSimple(model, context, options: SimpleStreamOptions): AssistantMessageEventStream
 ```
 
-完整移植 `src/api/openai-completions.ts` + `src/api/transform-messages.ts` + `src/api/simple-options.ts` + `src/api/openai-prompt-cache.ts` 中该 API 用到的部分，compat 字段按 `src/providers/compat-schema.ts` 的 `OpenAICompletionsCompat` 全量支持。HTTP 通过 `HttpTransport`（构造参数注入），SSE 用 `SseParser`，参数增量用 `PartialJson`，错误用 `ProviderErrors`。
+Port the parts of `src/api/openai-completions.ts` + `src/api/transform-messages.ts` + `src/api/simple-options.ts` + `src/api/openai-prompt-cache.ts` that this API uses in full; support all compat fields from `src/providers/compat-schema.ts`'s `OpenAICompletionsCompat`. HTTP goes through `HttpTransport` (injected as a constructor parameter), SSE uses `SseParser`, argument increments use `PartialJson`, and errors use `ProviderErrors`.
 
-## task-7（Models/Provider/认证/faux）暴露
+## task-7 (Models/Provider/auth/faux) exposure
 
 ```kotlin
 // io.github.whywood.deepdeep.sdk.ai
@@ -152,28 +152,28 @@ sealed interface AuthResolver { suspend fun resolve(overrides: AuthOverrides? = 
 data class ResolvedAuth(val apiKey: String?, val headers: Map<String, String> = emptyMap(), val source: String)
 class EnvApiKeyAuth(val label: String, val envVars: List<String>, val inlineKey: String? = null) : AuthResolver
 class StaticApiKeyAuth(val apiKey: String) : AuthResolver
-class CredentialStore            // JSON 持久化，可注入路径；兼容 pi 的 auth.json 结构
+class CredentialStore            // JSON persistence with injectable path; compatible with pi's auth.json structure
 ```
 
-`builtinProviders()` 从内置模型目录数据构建全部 42 个 provider：每个 provider 的 `models` 取其 chat 模型，`apiProviders` 按模型 `api` 字段分组；尚未实现的 api（除 openai-completions 外）用占位工厂（返回抛 `NotImplementedError` 的 ApiProvider）保证可编译；`auth` 用 `EnvApiKeyAuth`，env 变量名与上游 `src/providers/*.ts` 一致。
+`builtinProviders()` builds all 42 providers from the bundled catalog data: each provider's `models` are its chat models, and `apiProviders` groups them by the model `api` field; not-yet-implemented APIs (other than openai-completions) use placeholder factories (an ApiProvider that throws `NotImplementedError`) so everything still compiles; `auth` uses `EnvApiKeyAuth` with env variable names matching upstream `src/providers/*.ts`.
 
-faux provider（`providers/Faux.kt`）：移植 `src/providers/faux.ts` 的脚本化响应/流式事件/工具调用能力，供测试使用。
+faux provider (`providers/Faux.kt`): ports the scripted responses/streaming events/tool calls of `src/providers/faux.ts` for tests.
 
-## task-8（pi-agent）暴露
+## task-8 (pi-agent) exposure
 
-按 `docs/analysis/pi-agent.md` 落地 `io.github.whywood.deepdeep.sdk.agent`：`AgentMessage`/`AgentTool`/`AgentEvent`/`AgentContext`/`AgentState`/`AgentOptions`/`AgentLoopConfig`/`StreamFn`/`Agent`/`runAgentLoop`/`runAgentLoopContinue`/proxy。`StreamFn` 定义为：
+Implement `io.github.whywood.deepdeep.sdk.agent` per `docs/analysis/pi-agent.md`: `AgentMessage`/`AgentTool`/`AgentEvent`/`AgentContext`/`AgentState`/`AgentOptions`/`AgentLoopConfig`/`StreamFn`/`Agent`/`runAgentLoop`/`runAgentLoopContinue`/proxy. `StreamFn` is defined as:
 
 ```kotlin
 typealias StreamFn = suspend (model: Model, context: TranscriptContext, options: SimpleStreamOptions?) -> AssistantMessageEventStream
 ```
 
-pi-agent 只依赖 pi-ai 的公共类型与 `utils/` 中已冻结的函数；不要修改 pi-ai 模块。
+pi-agent depends only on pi-ai's public types and the frozen functions in `utils/`; do not modify the pi-ai module.
 
-## 通用约束
+## General constraints
 
-- Kotlin 代码不写注释；用命名和结构表达。
-- 先读 `docs/analysis/` 对应章节（有逐行证据），再读上游 TS 实现。
-- 文件写入范围严格按任务声明；不修改 `build.gradle.kts`、`gradle/libs.versions.toml`、`docs/`（除非任务明确）。
-- 测试：`./gradlew :pi-ai:jvmTest`（只跑 JVM 快速测试）；提交前确保 `:pi-ai:allTests` 绿。
-- 命名：包 `io.github.whywood.deepdeep.sdk.ai` / `io.github.whywood.deepdeep.sdk.agent` / `io.github.whywood.deepdeep.sdk.coding`；不用 `I` 前缀接口。
-- 完成后 complete task 并给 lead 发消息：文件清单、测试结果、与契约的偏差、遗留项。
+- Kotlin code carries no comments; express intent through naming and structure.
+- Read the corresponding `docs/analysis/` sections first (they carry line-by-line evidence), then the upstream TS implementation.
+- File write scope follows the task declaration strictly; do not modify `build.gradle.kts`, `gradle/libs.versions.toml`, or `docs/` (unless the task says so).
+- Tests: `./gradlew :pi-ai:jvmTest` (fast JVM-only tests); make sure `:pi-ai:allTests` is green before committing.
+- Naming: packages `io.github.whywood.deepdeep.sdk.ai` / `io.github.whywood.deepdeep.sdk.agent` / `io.github.whywood.deepdeep.sdk.coding`; no `I` prefix on interfaces.
+- When done, complete the task and message the lead: file list, test results, deviations from the contract, and open items.

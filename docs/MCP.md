@@ -1,26 +1,26 @@
-# MCP 接入指南
+# MCP integration guide
 
-pi2kotlin 0.2.0 起内置 MCP（Model Context Protocol）客户端，0.2.1 补齐 sampling / elicitation / roots，支持把第三方 MCP server 的工具、资源、提示词接入 agent 会话。
+pi2kotlin has shipped an embedded MCP (Model Context Protocol) client since 0.2.0; 0.2.1 added sampling / elicitation / roots, bringing third-party MCP server tools, resources, and prompts into agent sessions.
 
-## 支持范围
+## Supported scope
 
-| 能力 | 状态 |
+| Capability | Status |
 |---|---|
-| Streamable HTTP 传输（POST/JSON+SSE、`Mcp-Session-Id`、协议版本协商、GET 通知流、Last-Event-ID 续传、断线重连、DELETE 关闭） | 支持 |
-| stdio 传输 | 仅 JVM（Android 无子进程，配置会标记 `Unsupported`） |
-| 工具：direct / deferred / codemode / hidden 暴露、`toolExposure` 单工具覆盖 | 支持（codemode 映射为 deferred + tool_search，不做 JS 脚本） |
-| `tool_search`（BM25 + 中文 2-gram） | 支持 |
-| resources：`list_mcp_resources` / `list_mcp_resource_templates` / `read_mcp_resource` | 支持 |
-| prompts：list/get、`session.promptMcp(...)`、`/mcp__<server>__<prompt>` 斜杠命令 | 支持 |
-| OAuth 2.1：受保护资源发现、RFC 8414/OIDC、DCR、PKCE、refresh、scope step-up、token 持久化 | 支持（CIMD 不支持） |
-| `tools/list_changed`、日志/进度通知 | 支持 |
-| roots（工作区根目录声明、`roots/list_changed`） | 支持（默认返回 `cwd`，可配置/更新） |
-| sampling（server 请求宿主用当前模型生成） | 支持（默认启用，可用 `samplingEnabled = false` 关闭） |
-| elicitation（server 请求宿主向用户收集输入） | 支持（需宿主提供 `elicitationHandler`；未提供时不声明该能力） |
-| resource subscriptions / completion / CIMD | 未实现 |
-| legacy HTTP+SSE 传输 | 不支持（配置 `type:"sse"` 会报错） |
+| Streamable HTTP transport (POST/JSON+SSE, `Mcp-Session-Id`, protocol version negotiation, GET notification stream, Last-Event-ID resume, reconnect after disconnects, DELETE shutdown) | Supported |
+| stdio transport | JVM only (Android has no subprocesses; the config is marked `Unsupported`) |
+| Tools: direct / deferred / codemode / hidden exposure, per-tool `toolExposure` overrides | Supported (codemode maps to deferred + tool_search; no JS scripts) |
+| `tool_search` (BM25 + Chinese 2-gram) | Supported |
+| resources: `list_mcp_resources` / `list_mcp_resource_templates` / `read_mcp_resource` | Supported |
+| prompts: list/get, `session.promptMcp(...)`, `/mcp__<server>__<prompt>` slash commands | Supported |
+| OAuth 2.1: protected resource discovery, RFC 8414/OIDC, DCR, PKCE, refresh, scope step-up, token persistence | Supported (CIMD not supported) |
+| `tools/list_changed`, log/progress notifications | Supported |
+| roots (workspace root declarations, `roots/list_changed`) | Supported (returns `cwd` by default; configurable/updatable) |
+| sampling (server asks the host to generate with the current model) | Supported (enabled by default; disable with `samplingEnabled = false`) |
+| elicitation (server asks the host to collect user input) | Supported (requires a host `elicitationHandler`; the capability is not declared without one) |
+| resource subscriptions / completion / CIMD | Not implemented |
+| legacy HTTP+SSE transport | Not supported (`type:"sse"` config errors) |
 
-## 快速开始
+## Quick start
 
 ```kotlin
 import io.github.whywood.deepdeep.sdk.coding.mcp.McpOptions
@@ -50,10 +50,10 @@ val session = createAgentSession(
 )
 ```
 
-不传 `McpOptions.servers` 时，会从以下文件读取配置：
+When `McpOptions.servers` is not passed, configuration is read from:
 
-1. `<agentDir>/mcp.json`（全局）
-2. `<cwd>/.pi/mcp.json`（仅当项目被信任；`settings.json` 或 `AgentSessionOptions.projectTrusted` 控制）
+1. `<agentDir>/mcp.json` (global)
+2. `<cwd>/.pi/mcp.json` (only when the project is trusted; controlled by `settings.json` or `AgentSessionOptions.projectTrusted`)
 
 ```json
 {
@@ -76,95 +76,95 @@ val session = createAgentSession(
 }
 ```
 
-字段说明：
+Fields:
 
-- `type`：`stdio` 或 `http`（不写时按 `command`/`url` 推断；`streamable-http` 是别名；`sse` 不支持）
-- `command` / `args` / `env` / `cwd`：stdio
-- `url` / `headers` / `oauth` / `auth.provider`：HTTP
-- `enabled`：默认 `true`
-- `timeout`：单请求超时秒数，默认 `60`
-- `description`：给模型看的一句话说明
-- `exposure`：`direct` / `deferred`（默认）/ `codemode`（等价 deferred）/ `hidden`
-- `toolExposure`：按工具名或 `*` 通配覆盖单个工具的 exposure
+- `type`: `stdio` or `http` (inferred from `command`/`url` when omitted; `streamable-http` is an alias; `sse` is not supported)
+- `command` / `args` / `env` / `cwd`: stdio
+- `url` / `headers` / `oauth` / `auth.provider`: HTTP
+- `enabled`: `true` by default
+- `timeout`: per-request timeout in seconds, default `60`
+- `description`: a one-line description shown to the model
+- `exposure`: `direct` / `deferred` (default) / `codemode` (equivalent to deferred) / `hidden`
+- `toolExposure`: overrides a single tool's exposure by tool name or `*` glob
 
-`${VAR}` 会从环境变量插值；缺失变量会报错并跳过该 server。值为 `!command` 会被拒绝执行（安全限制）。
+`${VAR}` is interpolated from environment variables; a missing variable is an error and the server is skipped. A value of `!command` is rejected and not executed (security restriction).
 
-项目 `mcp.json` 只能覆盖全局同名 server 的 `enabled` / `exposure` / `toolExposure`，不能定义新 server、命令或凭据。
+A project `mcp.json` can only override `enabled` / `exposure` / `toolExposure` for global servers with the same name; it cannot define new servers, commands, or credentials.
 
-## 工具暴露与 tool_search
+## Tool exposure and tool_search
 
-- `direct`：连接后立即声明给模型，像内置工具一样调用。
-- `deferred`（默认）：工具不预先声明，模型先用 `tool_search` 搜索，命中的工具会在**下一个模型请求**被声明并可调用；命中结果同时写入会话自定义条目 `mcp_loaded_tools`，恢复会话后仍保持已加载状态。
-- `codemode`：上游 pi 用它把工具暴露给 JS 脚本；本 SDK 不做 JS 沙箱，按 `deferred` 处理。
-- `hidden`：注册但不暴露。
+- `direct`: declared to the model immediately after connecting and called like a built-in tool.
+- `deferred` (default): tools are not declared up front; the model searches with `tool_search` first, and matches are declared and callable in the **next model request**; matches are also written to the custom session entry `mcp_loaded_tools`, so they stay loaded after a session resume.
+- `codemode`: upstream pi uses this to expose tools to JS scripts; this SDK has no JS sandbox and treats it as `deferred`.
+- `hidden`: registered but not exposed.
 
-`tool_search` 的排序是 BM25，中英文混合查询可用（中文按 2-gram 分词）。存在 deferred server 时会自动加入会话。
+`tool_search` ranks with BM25 and handles mixed Chinese/English queries (Chinese is tokenized into 2-grams). It is added to the session automatically when a deferred server exists.
 
-## 资源
+## Resources
 
-连接成功且 server 声明 resources 能力时，会自动注册：
+When a connection succeeds and the server declares the resources capability, these are registered automatically:
 
-- `list_mcp_resources`（`server`、`cursor`）
+- `list_mcp_resources` (`server`, `cursor`)
 - `list_mcp_resource_templates`
-- `read_mcp_resource`（`uri` 必填，`server` 可选）
+- `read_mcp_resource` (`uri` required, `server` optional)
 
-多 server 时列表会合并；`read` 需要指定 `server`（只有一个 server 时可省略）。文本与图片直接返回，二进制按配置目录落盘。
+Lists merge across servers; `read` requires a `server` (can be omitted when there is only one). Text and images are returned directly; binaries are written to the configured directory.
 
-宿主也可以直接调用：
+The host can also call:
 
 ```kotlin
 session.mcp.readResource("internal-docs", "file:///handbook.md")
 ```
 
-## 提示词
+## Prompts
 
 ```kotlin
-val prompts = session.mcp.listPrompts()          // 全部 server
+val prompts = session.mcp.listPrompts()          // all servers
 session.promptMcp("demo", "greet", mapOf("who" to "world"))
 ```
 
-也可以在 `prompt` 中直接写斜杠命令：`/mcp__demo__greet world`。
+You can also write slash commands directly in `prompt`: `/mcp__demo__greet world`.
 
 ## OAuth
 
-HTTP server 未配置 `Authorization` 或配置了 `oauth` 时，401 会触发 OAuth 流程：
+When an HTTP server has no `Authorization` configured, or has `oauth` configured, a 401 triggers the OAuth flow:
 
 ```kotlin
 val result = session.mcp.signIn(
     server = "internal-docs",
-    redirectUri = "http://127.0.0.1:33418/callback", // JVM 可用 pi-mcp 的 LoopbackCallbackServer
+    redirectUri = "http://127.0.0.1:33418/callback", // on JVM, pi-mcp's LoopbackCallbackServer is available
     interaction = object : McpOAuthInteraction {
         override suspend fun authorize(url: String, redirectUri: String): String {
-            // Android: 打开 Custom Tabs / 浏览器，等待 deep link 回调并返回完整 callback URL
+            // Android: open Custom Tabs / a browser, wait for the deep link callback, and return the full callback URL
             return awaitBrowserCallback(url, redirectUri)
         }
     },
 )
 ```
 
-- token 持久化到 `<agentDir>/mcp-auth.json`（原子写，0600）。
-- 自动 refresh（提前 30 秒）、401 重试一次、403 `insufficient_scope` step-up。
-- JVM 可用 `io.github.whywood.deepdeep.sdk.mcp.oauth.LoopbackCallbackServer` 起本地回调；Android 需要宿主提供浏览器回调（示例见 `examples/android-demo`）。
-- `auth.provider`（复用 SDK 已登录的 provider token）目前**只解析配置、未接线**，请不要依赖。
+- Tokens persist to `<agentDir>/mcp-auth.json` (atomic write, 0600).
+- Automatic refresh (30 seconds early), one retry on 401, and step-up on 403 `insufficient_scope`.
+- On JVM, `io.github.whywood.deepdeep.sdk.mcp.oauth.LoopbackCallbackServer` provides a local callback; on Android the host supplies the browser callback (see `examples/android-demo`).
+- `auth.provider` (reusing an SDK provider token you are already signed in with) currently **only parses the config and is not wired up**; do not rely on it.
 
 ## roots / sampling / elicitation
 
-这三个是 MCP 的客户端能力，由 `McpOptions` 控制：
+These three are MCP client capabilities, controlled by `McpOptions`:
 
 ```kotlin
 McpOptions(
-    // roots：默认返回 file://<cwd>；可显式配置，运行时可更新
+    // roots: returns file://<cwd> by default; can be set explicitly and updated at runtime
     roots = listOf(McpRoot(uri = "file:///data/user/0/app/files/workspace", name = "workspace")),
     rootsEnabled = true,
 
-    // sampling：server 调用宿主模型；默认启用，可关闭
+    // sampling: the server calls the host model; enabled by default, can be disabled
     samplingEnabled = true,
     samplingMaxTokens = 4096,
     samplingTemperature = null,
 
-    // elicitation：server 请求用户输入，由宿主 UI 实现
+    // elicitation: the server asks for user input, implemented by the host UI
     elicitationHandler = { request ->
-        // request.message 是提示文案，request.requestedSchema 是 JSON Schema 表单
+        // request.message is the prompt text, request.requestedSchema is the JSON Schema form
         val accepted = showForm(request.message, request.requestedSchema)
         McpElicitationResult(
             action = if (accepted != null) "accept" else "decline",
@@ -174,23 +174,23 @@ McpOptions(
 )
 ```
 
-行为与注意事项：
+Behavior and caveats:
 
-- **roots**：`roots/list` 返回配置的根目录；`rootsEnabled=false` 时不声明能力。运行时更新：
+- **roots**: `roots/list` returns the configured roots; with `rootsEnabled=false` the capability is not declared. Runtime update:
   ```kotlin
   session.mcp.setRoots(listOf(McpRoot("file:///new-workspace")))
   ```
-  会自动发送 `notifications/roots/list_changed`。
-- **sampling**：server 发 `sampling/createMessage` 时，SDK 用**当前会话模型**发一次非流式请求（`maxTokens` 取 min(server 请求值, `samplingMaxTokens`, 模型上限)），支持 text/image 输入，返回 text/image。这是真实模型调用，**会消耗 token**；不需要时设置 `samplingEnabled = false`（不声明能力，server 不会请求）。sampling 请求发生在工具执行期间，不会推进 agent 会话轮次。
-- **elicitation**：只有提供 `elicitationHandler` 才声明能力。handler 收到 `message` + `requestedSchema`，返回 `action` 为 `"accept"`（可带符合 schema 的 `content`）、`"decline"` 或 `"cancel"`。没有 handler 时能力不声明；若 server 仍强行请求会收到 `-32601`。Android/JVM 的 UI 由宿主实现，SDK 不弹窗。
-- 三者都不影响普通 MCP 工具/资源/prompt。
+  This automatically sends `notifications/roots/list_changed`.
+- **sampling**: when the server sends `sampling/createMessage`, the SDK makes one non-streaming request with the **current session model** (`maxTokens` is min(server request value, `samplingMaxTokens`, model limit)), supports text/image input, and returns text/image. This is a real model call and **consumes tokens**; set `samplingEnabled = false` when you don't need it (the capability is then not declared and servers will not ask). Sampling requests happen during tool execution and do not advance the agent session's turns.
+- **elicitation**: the capability is declared only when an `elicitationHandler` is provided. The handler receives `message` + `requestedSchema` and returns an `action` of `"accept"` (optionally with schema-conforming `content`), `"decline"`, or `"cancel"`. Without a handler the capability is not declared; a server that still insists receives `-32601`. Android/JVM UI is implemented by the host; the SDK never opens dialogs.
+- None of the three affects normal MCP tools/resources/prompts.
 
-## 运行时管理
+## Runtime management
 
 ```kotlin
 session.mcp.servers                              // List<McpServerStatus>
 session.mcp.reconnect("docs")
-session.mcp.reload()                             // 重读 mcp.json 并 diff
+session.mcp.reload()                             // re-read mcp.json and diff
 session.mcp.addServer("extra", config)
 session.mcp.removeServer("extra")
 session.mcp.setEnabled("docs", enabled = false)
@@ -198,7 +198,7 @@ session.mcp.healthCheck()
 session.mcp.listPrompts(); session.mcp.tools(); session.mcp.readResource(...)
 ```
 
-事件：
+Events:
 
 ```kotlin
 session.events.collect { event ->
@@ -212,28 +212,28 @@ session.events.collect { event ->
 }
 ```
 
-`session.mcp.servers` 含 `state`、`toolCount`、`serverInfo`、`instructions`、`lastError`。
+`session.mcp.servers` exposes `state`, `toolCount`, `serverInfo`, `instructions`, and `lastError`.
 
-## 平台差异
+## Platform differences
 
-- Android：只能使用 HTTP server；stdio 配置会得到 `Unsupported` 状态和明确错误。访问本机 HTTP server 需要宿主配置 cleartext（仅调试）或使用 https。
-- JVM：HTTP + stdio 均可用。stdio server 关闭时会清理子进程（SIGTERM → SIGKILL）。
-- 首次 `createAgentSession` 会并行连接所有已启用的 server，最多等待 `McpOptions.connectTimeoutMs`（默认 10 秒）；超时/失败的 server 不阻塞会话，状态与错误通过事件暴露。
+- Android: HTTP servers only; a stdio config yields `Unsupported` status and an explicit error. Reaching a local HTTP server requires the host to allow cleartext (debug only) or use https.
+- JVM: HTTP + stdio both work. When a stdio server shuts down, its subprocess is cleaned up (SIGTERM → SIGKILL).
+- The first `createAgentSession` connects all enabled servers in parallel and waits at most `McpOptions.connectTimeoutMs` (default 10 seconds); timed-out/failed servers do not block the session, and their status and errors surface through events.
 
-## 安全与限制
+## Security and limitations
 
-- 项目配置仅在项目被信任时读取，且只能覆盖 `enabled`/`exposure`/`toolExposure`。
-- 不执行 `!command` 插值；HTTP 要求 https（loopback 例外）。
-- 输出默认按 20KB 中间截断（全文可落盘），单 SSE 事件上限 16MB，每请求默认 60 秒超时。
-- 不支持：codemode JS 沙箱、legacy SSE、CIMD、resource subscriptions、completion、MCP prompts 之外的 UI 资源（`ui://`）。
-- Android OAuth 仍需宿主提供浏览器回调与 redirect URI（JVM 内置 loopback）。
-- 项目 `.pi/mcp.json` 只能覆盖全局 server 的 enabled/exposure/toolExposure，不能新增 server。
-- `auth.provider` 配置解析但未接线。
+- Project config is read only when the project is trusted, and it can only override `enabled`/`exposure`/`toolExposure`.
+- `!command` interpolation is not executed; HTTP requires https (loopback excepted).
+- Output is truncated in the middle at 20KB by default (the full text can be written to disk), a single SSE event is capped at 16MB, and each request has a 60-second default timeout.
+- Not supported: codemode JS sandbox, legacy SSE, CIMD, resource subscriptions, completion, and UI resources other than MCP prompts (`ui://`).
+- Android OAuth still needs a host-provided browser callback and redirect URI (JVM has a built-in loopback).
+- A project `.pi/mcp.json` can only override enabled/exposure/toolExposure of global servers; it cannot add servers.
+- `auth.provider` is parsed but not wired up.
 
-## 示例
+## Examples
 
 ```bash
 ./gradlew :examples:mcp-demo:run
 ```
 
-该示例启动一个本地 mock MCP HTTP server（echo 工具 + 资源），演示 deferred 工具经 `tool_search` 加载并调用的完整流程。
+The example starts a local mock MCP HTTP server (an echo tool + a resource) and demonstrates the full flow of a deferred tool being loaded through `tool_search` and called.

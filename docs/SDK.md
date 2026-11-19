@@ -1,8 +1,8 @@
-# pi2kotlin SDK 使用指南
+# pi2kotlin SDK guide
 
-面向 Android / JVM 应用的编码 agent SDK：把 pi（TypeScript）的 `pi-ai`、`pi-agent`、`pi-coding-agent` 重写为 Kotlin Multiplatform 库。
+A coding agent SDK for Android / JVM apps: pi's (TypeScript) `pi-ai`, `pi-agent`, and `pi-coding-agent` rewritten as a Kotlin Multiplatform library.
 
-## 依赖
+## Dependency
 
 ```kotlin
 dependencies {
@@ -10,9 +10,9 @@ dependencies {
 }
 ```
 
-Android 使用 `io.github.whywood.deepdeep.sdk:pi-coding-agent-android:0.6.3`。产物暂未发布到 Maven Central，两种获取方式：
+On Android use `io.github.whywood.deepdeep.sdk:pi-coding-agent-android:0.6.3`. Artifacts are not published to Maven Central yet; there are two ways to get them:
 
-**JitPack**（按 tag 构建，首次请求可能较慢）：
+**JitPack** (built per tag; the first request can be slow):
 
 ```kotlin
 // settings.gradle.kts
@@ -20,16 +20,16 @@ repositories {
     maven("https://jitpack.io")
 }
 
-// 模块
+// modules
 implementation("com.github.Sadami3066.DeepDeep-KotlinSDK:pi-coding-agent:v0.6.3")        // JVM
 implementation("com.github.Sadami3066.DeepDeep-KotlinSDK:pi-coding-agent-android:v0.6.3") // Android
 ```
 
-**本地发布**：先执行 `./gradlew publishToMavenLocal`，再依赖 `io.github.whywood.deepdeep.sdk:*:0.6.3`。
+**Local publish**: run `./gradlew publishToMavenLocal`, then depend on `io.github.whywood.deepdeep.sdk:*:0.6.3`.
 
-模块：`pi-ai`（LLM 统一层）→ `pi-agent`（agent 循环）→ `pi-coding-agent`（会话/工具/提示词/SDK 门面）。targets：Android（minSdk 26）+ JVM（Java 17 字节码）。
+Modules: `pi-ai` (unified LLM layer) → `pi-agent` (agent loop) → `pi-coding-agent` (sessions/tools/prompts/SDK facade). Targets: Android (minSdk 26) + JVM (Java 17 bytecode).
 
-## 快速开始
+## Quick start
 
 ```kotlin
 val session = createAgentSession(
@@ -54,49 +54,49 @@ val subscription = session.subscribe { event ->
     }
 }
 
-session.prompt("帮我看看这个目录里有什么")
+session.prompt("Summarize what's in this directory")
 println(session.getLastAssistantText())
 subscription()
 session.close()
 ```
 
-## 会话
+## Sessions
 
 ```kotlin
 val session = createAgentSession(options)
-session.prompt("...")                                   // 一次完整 run（含重试/工具调用）
-session.steer("顺便看一下 README")                        // 流式期间插入，当前轮工具调用后生效
-session.followUp("跑完再看一下测试")                       // 当前 run 结束后继续
-session.abort()                                         // 协作式中止
+session.prompt("...")                                   // one complete run (including retries/tool calls)
+session.steer("Also check the README")                  // injected while streaming; effective after the current turn's tool calls
+session.followUp("Look at the tests once this finishes") // continues after the current run ends
+session.abort()                                         // cooperative abort
 session.waitForIdle()
 session.setModel(model, thinkingLevel = "high")
 session.setThinkingLevel("medium")
-session.messages                                        // 当前 transcript（AgentMessage）
-session.systemPrompt                                    // 当前生效的系统提示词
-session.sessionFile                                     // 会话 JSONL 路径（可能尚未落盘）
+session.messages                                        // current transcript (AgentMessage)
+session.systemPrompt                                    // the system prompt currently in effect
+session.sessionFile                                     // session JSONL path (may not exist on disk yet)
 session.close()
 ```
 
-会话持久化为与 pi 兼容的 JSONL（`~/.pi` 结构），可直接被 pi 读取；函数支持恢复：
+Sessions persist as pi-compatible JSONL (the `~/.pi` layout) and can be read directly by pi; the API supports resume:
 
 ```kotlin
-// 新建
+// new
 val session = createAgentSession(options.copy(sessionFile = null))
-// 恢复
+// resume
 val resumed = createAgentSession(options.copy(sessionFile = file))
-// 会话运行时（自动重建会话/切换/分叉）
+// session runtime (automatic rebuild/switch/fork)
 val runtime = AgentSessionRuntime.create(options)
 runtime.newSession()
 runtime.switchSession(file)
 runtime.fork(entryId = null)
 ```
 
-存储根目录完全由宿主决定（Android 用应用私有目录，JVM 用任意目录）。
+The storage root is entirely up to the host (app-private directory on Android, any directory on the JVM).
 
-## 模型与 Provider
+## Models and providers
 
-- 内置 42 个 provider（OpenAI 兼容 28 个已可用；anthropic/responses/google 等逐步补齐），模型目录随包内置。
-- 自定义 provider：`<agentDir>/models.json`（与 pi 格式兼容），或运行时注入：
+- 42 built-in providers (28 OpenAI-compatible ones are usable; anthropic/responses/google and others are being filled in), with the model catalog bundled.
+- Custom providers: `<agentDir>/models.json` (compatible with pi's format), or injected at runtime:
 
 ```kotlin
 AgentSessionOptions(
@@ -106,21 +106,21 @@ AgentSessionOptions(
 )
 ```
 
-- 认证：`<agentDir>/auth.json` 中读取 api key；也可注入 `CredentialStore`；OAuth 登录流程见后续版本。
+- Auth: API keys are read from `<agentDir>/auth.json`; a `CredentialStore` can also be injected. OAuth login flows come in later releases.
 
-## 工具
+## Tools
 
-默认工具集：`read`、`write`、`edit`、`ls`、`grep`、`find`、`bash`（bash 需要注入 `ShellExecutor`，移动端默认不提供）。
+Default tool set: `read`, `write`, `edit`, `ls`, `grep`, `find`, `bash` (bash requires an injected `ShellExecutor`; mobile builds do not provide one by default).
 
-自定义工具：
+Custom tools:
 
 ```kotlin
 val myTool = CodingTool(
     name = "weather",
-    description = "查询天气",
+    description = "Check the weather",
     parameters = buildJsonObject { put("type", "object") },
     label = "Weather",
-    execute = { _, args, _, _ -> textResult("晴") },
+    execute = { _, args, _, _ -> textResult("Sunny") },
 )
 
 AgentSessionOptions(..., tools = defaultCodingTools(...) + myTool)
@@ -137,22 +137,22 @@ CodingHooks(
 )
 ```
 
-`AgentSessionOptions.extraSystemPromptSections` 是每次请求都会参与的静态段；`initialSystemPromptSections` 只写入会话首条 system 快照，用于给 hook 动态生成的段（环境、偏好、插件状态等）提供初始值。二者通常配合使用：新建会话时首条快照已包含动态段，后续只有值变化时才追加 system patch。
+`AgentSessionOptions.extraSystemPromptSections` are static sections included in every request; `initialSystemPromptSections` are written only into the session's first system snapshot, providing initial values for sections that hooks generate dynamically (environment, preferences, plugin state, and so on). The two are normally used together: the first snapshot on a new session already contains the dynamic sections, and afterwards a system patch is appended only when values change.
 
-## 平台接入
+## Platform integration
 
-- HTTP：实现 `HttpTransport`（默认 `okHttpTransport()`）。
-- 文件：okio `FileSystem`，可注入（默认 `FileSystem.SYSTEM`）。
-- 命令执行：实现 `ShellExecutor` 并传给 `AgentSessionOptions.shellExecutor`。
-- 凭据：实现自己的 `CredentialStore` 或使用默认文件实现。
+- HTTP: implement `HttpTransport` (defaults to `okHttpTransport()`).
+- Files: okio `FileSystem`, injectable (defaults to `FileSystem.SYSTEM`).
+- Command execution: implement `ShellExecutor` and pass it to `AgentSessionOptions.shellExecutor`.
+- Credentials: implement your own `CredentialStore` or use the default file implementation.
 
 ## MCP
 
-见 [MCP 接入指南](MCP.md)。
+See the [MCP guide](MCP.md).
 
-## 限制
+## Limitations
 
-- 不包含 CLI/交互式 TUI；UI 由宿主应用渲染事件流。
-- 不支持加载 pi 的 TypeScript 扩展；扩展点以 Kotlin `CodingHooks` + 自定义 `CodingTool` 提供。
-- 图片按模型 `inputLimits` 规范化（尺寸/编码/大小）；请求体只保留预算内最近的内联图（默认 20 张 / 20MiB base64，可在 `settings.json` 的 `images.requestMaxImages` / `requestMaxBytes` 调整），更旧的图替换为文本占位，会话历史与 JSONL 仍保留原图。
-- `grep`/`find` 为纯 Kotlin 实现，不依赖 rg/fd。
+- No CLI or interactive TUI; the host app renders the event stream.
+- pi's TypeScript extensions cannot be loaded; extension points are Kotlin `CodingHooks` plus custom `CodingTool`s.
+- Images are normalized to the model's `inputLimits` (dimensions/encoding/size); request bodies keep only the most recent inline images within budget (default 20 images / 20MiB of base64, adjustable via `images.requestMaxImages` / `requestMaxBytes` in `settings.json`), older images become text placeholders, and session history and JSONL keep the originals.
+- `grep`/`find` are pure Kotlin implementations with no rg/fd dependency.

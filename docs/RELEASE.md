@@ -1,27 +1,27 @@
-# 发布与产物校验
+# Release and artifact verification
 
-面向维护者。当前版本：`0.6.3`（根 `build.gradle.kts` 中 `subprojects.version`）。
+For maintainers. Current version: `0.6.3` (`subprojects.version` in the root `build.gradle.kts`).
 
-## 本地发布流程
+## Local release flow
 
 ```bash
 ./scripts/release-local.sh 0.6.3
 ```
 
-脚本依次执行：
+The script runs the following in order:
 
-1. `./gradlew clean build`（JVM + Android target 编译与测试）
-2. `./gradlew publishToMavenLocal`（发布 `io.github.whywood.deepdeep.sdk:pi-ai-jvm`、`pi-ai-android`、`pi-agent-*`、`pi-coding-agent-*`，含 sources jar 与 POM）
-3. `node scripts/verify-release.mjs 0.6.3`（校验产物完整性与字节码版本）
-4. `./gradlew :examples:jvm-demo:run`（JVM 端到端演示）
-5. 构建 Android demo APK（独立工程，消费本地发布产物）
-6. 生成 `build/release-manifest.txt`（版本、生成时间、jar/aar/apk 的 sha256）
+1. `./gradlew clean build` (compile and test the JVM + Android targets)
+2. `./gradlew publishToMavenLocal` (publish `io.github.whywood.deepdeep.sdk:pi-ai-jvm`, `pi-ai-android`, `pi-agent-*`, `pi-coding-agent-*`, including sources jars and POMs)
+3. `node scripts/verify-release.mjs 0.6.3` (verify artifact completeness and bytecode version)
+4. `./gradlew :examples:jvm-demo:run` (JVM end-to-end demo)
+5. Build the Android demo APK (standalone project consuming the locally published artifacts)
+6. Generate `build/release-manifest.txt` (version, generation time, sha256 of jar/aar/apk)
 
-低内存机器上脚本内部应通过 `scripts/gw.sh` 串行执行构建，避免多个 Gradle 实例同时占用内存。
+On low-memory machines the script should run builds serially through `scripts/gw.sh` to avoid multiple Gradle instances competing for memory.
 
-## 产物清单
+## Artifact list
 
-| 产物 | 路径 |
+| Artifact | Path |
 |---|---|
 | JVM jar | `~/.m2/repository/io/github/whywood/deepdeep/sdk/<module>-jvm/0.6.3/<module>-jvm-0.6.3.jar` |
 | JVM sources | `~/.m2/repository/io/github/whywood/deepdeep/sdk/<module>-jvm/0.6.3/<module>-jvm-0.6.3-sources.jar` |
@@ -30,24 +30,24 @@
 | Android AAR | `~/.m2/repository/io/github/whywood/deepdeep/sdk/<module>-android/0.6.3/<module>-android-0.6.3.aar` |
 | Demo APK | `examples/android-demo/build/outputs/apk/debug/pi2kotlin-android-demo-debug.apk` |
 
-## 校验项
+## Checks
 
-`scripts/verify-release.mjs` 检查：
+`scripts/verify-release.mjs` verifies:
 
-- 四个模块的 JVM jar / POM / Gradle module metadata / Android AAR / sources jar 均存在
-- JVM jar 内 class 文件 major version 为 `61`（Java 17）；Android 依赖与 `minSdk 26` 兼容
-- POM 版本与发布版本一致，模块间依赖坐标正确（`pi-agent-jvm` → `pi-ai-jvm`，`pi-coding-agent-jvm` → `pi-agent-jvm`）
-- Android AAR 包含 `classes.jar` 与 `AndroidManifest.xml`
+- All four modules have a JVM jar / POM / Gradle module metadata / Android AAR / sources jar
+- Class files in the JVM jar have major version `61` (Java 17); Android dependencies are compatible with `minSdk 26`
+- POM versions match the release version, and inter-module dependency coordinates are correct (`pi-agent-jvm` → `pi-ai-jvm`, `pi-coding-agent-jvm` → `pi-agent-jvm`)
+- Android AARs contain `classes.jar` and `AndroidManifest.xml`
 
-## 版本与 JVM 目标
+## Version and JVM target
 
-- 版本号统一在根 `build.gradle.kts` 的 `subprojects { version = ... }` 设置
-- 推送 tag `v<version>` 后，JitPack 按该 tag 构建；依赖版本即 tag 名（如 `v0.6.3`）
-- JVM target 使用 `jvmToolchain(17)`，发布产物为 Java 17 字节码；Android target 编译选项同样为 17
-- README / SDK 文档中的 JVM 要求必须与实际字节码保持一致；改动 toolchain 后需重跑 `verify-release.mjs`
+- The version is set in one place: `subprojects { version = ... }` in the root `build.gradle.kts`
+- After a `v<version>` tag is pushed, JitPack builds that tag; the dependency version is the tag name (for example `v0.6.3`)
+- The JVM target uses `jvmToolchain(17)`, so published artifacts are Java 17 bytecode; the Android target compiles to 17 as well
+- The JVM requirements in README / SDK docs must match the actual bytecode; re-run `verify-release.mjs` after changing the toolchain
 
-## 已知发布限制
+## Known release limitations
 
-- 未配置 Maven Central / 私有仓库凭据；外部分发走 JitPack（按 tag 构建，首次较慢），如需发布到 Maven Central 仍需在各模块补充 `publishing.repositories`
-- Android demo 是独立 Gradle 工程（`examples/android-demo`），依赖 `~/.m2` 中的发布产物；发布新版本后需重新构建
-- 发布前应在有真实设备的机器上跑一次 Android demo（安装、启动、离线对话、销毁重开）；真机证据按需本地留存，不随公开仓库发布
+- No Maven Central or private repository credentials are configured; external distribution goes through JitPack (tag builds, slower on first request). Publishing to Maven Central still requires adding `publishing.repositories` to each module
+- The Android demo is a standalone Gradle project (`examples/android-demo`) that depends on the artifacts published to `~/.m2`; rebuild it after publishing a new version
+- Before releasing, run the Android demo once on a machine with a real device (install, launch, offline conversation, destroy and relaunch); keep device evidence locally as needed rather than publishing it with the public repository

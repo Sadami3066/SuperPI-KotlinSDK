@@ -1,172 +1,172 @@
-# 计划
+# Plan
 
-## 定位（2026-10-22 与用户确认）
+## Positioning (confirmed with the user on 2026-10-22)
 
-Kotlin 版 pi 是一个**现代化、轻量的 SDK**，用于开发者构建**手机 agent 应用**。
+The Kotlin edition of pi is a **modern, lightweight SDK** for developers building **mobile agent apps**.
 
-由此确定的三条边界：
+This defines three boundaries:
 
-1. **只做库，不做 CLI**：不移植 `pi-coding-agent` 的 CLI/参数解析、interactive TUI、print/json/rpc 运行模式；只移植其 core/SDK 层（`AgentSession`/`SessionManager`/工具/设置/认证/模型解析/压缩/扩展 hook）。
-2. **全量 42 个 provider**：pi-ai 的 provider 矩阵完整移植，不做裁剪。
-3. **移动端优先**：Kotlin Multiplatform（`android` + `jvm` 两个 target；iOS 目标后续在 macOS 上可加），核心逻辑放 `commonMain`，不依赖 JVM 专有 API；HTTP、文件、凭据存储等平台能力通过可替换实现注入。
+1. **Library only, no CLI**: do not port `pi-coding-agent`'s CLI/argument parsing, interactive TUI, or print/json/rpc run modes; port only its core/SDK layer (`AgentSession`/`SessionManager`/tools/settings/auth/model resolution/compaction/extension hooks).
+2. **All 42 providers**: port pi-ai's provider matrix in full, with no trimming.
+3. **Mobile first**: Kotlin Multiplatform (`android` + `jvm` targets; an iOS target can be added later on macOS), with core logic in `commonMain` and no dependence on JVM-only APIs; platform capabilities such as HTTP, files, and credential storage are injected through replaceable implementations.
 
-## 目标
+## Goals
 
-| 模块 | 对应上游 | 内容 |
+| Module | Upstream | Contents |
 |---|---|---|
-| `pi-ai` | `packages/ai`（27,709 行 TS） | 类型/事件协议、10 个 chat API 实现、42 provider、认证/OAuth、模型目录、图片/分类器、usage/cost |
-| `pi-agent` | `packages/agent`（2,539 行 TS） | Agent 类、agent loop、工具执行、事件、transport/proxy |
-| `pi-coding-agent` | `packages/coding-agent`（76,051 行 TS） | 仅 core/SDK：会话编排、会话持久化、设置、认证、模型解析、工具、系统提示词/资源、压缩、扩展 hook |
+| `pi-ai` | `packages/ai` (27,709 lines of TS) | Type/event protocol, 10 chat API implementations, 42 providers, auth/OAuth, model catalog, image/classifier, usage/cost |
+| `pi-agent` | `packages/agent` (2,539 lines of TS) | Agent class, agent loop, tool execution, events, transport/proxy |
+| `pi-coding-agent` | `packages/coding-agent` (76,051 lines of TS) | core/SDK only: session orchestration, session persistence, settings, auth, model resolution, tools, system prompt/resources, compaction, extension hooks |
 
-源码分析见 `docs/analysis/`（4,400+ 行，含逐字段类型规格、事件协议、50 条行为保真清单、文件/协议格式）。
+Source analysis lives in `docs/analysis/` (4,400+ lines, including field-by-field type specs, the event protocol, a 50-item behavior fidelity checklist, and file/protocol formats).
 
-## SDK 设计原则
+## SDK design principles
 
-- **轻量**：不引入 Node/Bun、无 CLI、无 TUI、无进程内 TS 扩展；核心依赖只有 coroutines/serialization/okio，HTTP 实现可替换。
-- **现代 API**：`suspend` 函数 + `Flow` 事件流 + `close()`/结构化并发；不可变配置 + 显式生命周期；无全局单例。
-- **可嵌入**：存储根目录、HTTP 传输、凭据存储、工具集、系统提示词、扩展 hook 全部可注入；Android 上默认使用应用私有目录。
-- **平台无关核心**：`commonMain` 只用 multiplatform API；`android`/`jvm` 各自提供 OkHttp 传输与文件实现。
-- **行为对齐上游**：事件序列、JSON 字段、错误文本、会话格式与 pi 保持一致（可对照、可互操作）。
+- **Lightweight**: no Node/Bun, no CLI, no TUI, no in-process TS extensions; the core depends only on coroutines/serialization/okio, and the HTTP implementation is replaceable.
+- **Modern API**: `suspend` functions + `Flow` event streams + `close()`/structured concurrency; immutable configuration + explicit lifecycle; no global singletons.
+- **Embeddable**: storage root, HTTP transport, credential storage, tool set, system prompt, and extension hooks are all injectable; on Android the app-private directory is the default.
+- **Platform-agnostic core**: `commonMain` uses only multiplatform APIs; `android`/`jvm` each provide the OkHttp transport and file implementation.
+- **Behavior aligned with upstream**: event sequences, JSON fields, error text, and session format stay consistent with pi (comparable and interoperable).
 
-## 里程碑
+## Milestones
 
-### M0 基础设施与调研（已完成）
+### M0 Infrastructure and research (done)
 
-- Gradle + Kotlin/JVM 多模块工程、`./gradlew build` 全绿
-- pi-ai 基础类型（Message/Content/Usage/Model/Tool/事件）+ 序列化 + 事件流
-- 1.3.0 模型目录数据（42 provider / 1,714 条）+ 加载器 + 测试
-- 三包源码分析文档（pi-ai / pi-agent / pi-coding-agent + 格式规格）
+- Multi-module Gradle + Kotlin/JVM project with `./gradlew build` fully green
+- pi-ai base types (Message/Content/Usage/Model/Tool/events) + serialization + event streams
+- 1.3.0 model catalog data (42 providers / 1,714 entries) + loader + tests
+- Source analysis docs for the three packages (pi-ai / pi-agent / pi-coding-agent + format specs)
 
-### M1 工程改造为 KMP SDK（已完成）
+### M1 Project converted to a KMP SDK (done)
 
-- Kotlin Multiplatform：`commonMain` + `jvm` + `android`（AGP 9.4.1、Kotlin 2.4.21、minSdk 26），`okhttpMain` 共享源集
-- 模型目录改为一处 gzip 资源内嵌（约 68KB 源码、50KB 二进制），`scripts/vendor-model-data.sh` + `generate-catalog.py` 可复现
-- 验收：`./gradlew build` 全绿；jvmTest 与 testAndroidHostTest 都跑通
+- Kotlin Multiplatform: `commonMain` + `jvm` + `android` (AGP 9.4.1, Kotlin 2.4.21, minSdk 26), with an `okhttpMain` shared source set
+- Model catalog embedded as a single gzip resource (about 68KB of source, 50KB binary), reproducible via `scripts/vendor-model-data.sh` + `generate-catalog.py`
+- Acceptance: `./gradlew build` fully green; both jvmTest and testAndroidHostTest pass
 
-### M2 pi-ai 核心协议（已完成）
+### M2 pi-ai core protocol (done)
 
-1. SSE 解析、partial JSON 增量解析
-2. transcript 规范化：normalizeContext、system/工具声明重放、孤儿工具调用、图片降级
-3. JSON Schema 工具参数校验（错误文本与上游一致）
-4. retry/abort/错误规范化/context overflow 判定
-5. `Models`/`Provider` 注册表 + api key 认证 + `calculateCost`/thinking level + 42 个内置 provider
-6. `openai-completions`（28 个 provider 可用；compat 28 字段全支持）
-7. faux provider + MockWebServer fixture 测试
+1. SSE parsing, incremental partial JSON parsing
+2. Transcript normalization: normalizeContext, system/tool declaration replay, orphan tool calls, image downgrade
+3. JSON Schema tool argument validation (error text matches upstream)
+4. retry/abort/error normalization/context overflow detection
+5. `Models`/`Provider` registry + api key auth + `calculateCost`/thinking level + 42 built-in providers
+6. `openai-completions` (28 providers usable; all 28 compat fields supported)
+7. faux provider + MockWebServer fixture tests
 
-验收：pi-ai 250 JVM tests + 193 Android host tests、pi-agent 113 JVM tests + 113 Android host tests 全绿；`./gradlew clean build` 三模块双 target 全绿。
+Acceptance: pi-ai 250 JVM tests + 193 Android host tests, pi-agent 113 JVM tests + 113 Android host tests all green; `./gradlew clean build` green for three modules across both targets.
 
-### M3 pi-ai 其余 provider
+### M3 Remaining pi-ai providers
 
-`openai-completions` 已覆盖 28 个 provider；其余 13 个 API 实现仍为占位。
+`openai-completions` now covers 28 providers; the other 13 API implementations are still placeholders.
 
-`anthropic-messages`、`openai-responses`、`azure`、`google-generative-ai`、`google-vertex`、`mistral-conversations`、`bedrock-converse-stream`、`openai-codex-responses`、`pi-messages`、image/classifier API；9 个 OAuth flow（按移动端可用的方式实现：外部浏览器 + 回调/设备码）。
+`anthropic-messages`, `openai-responses`, `azure`, `google-generative-ai`, `google-vertex`, `mistral-conversations`, `bedrock-converse-stream`, `openai-codex-responses`, `pi-messages`, image/classifier APIs; 9 OAuth flows (implemented in mobile-friendly ways: external browser + callback/device code).
 
-### M4 pi-agent（已完成）
+### M4 pi-agent (done)
 
-AgentMessage/AgentEvent、双层 agent loop、并行/串行工具执行、hooks、队列/中断、transport/proxy。
+AgentMessage/AgentEvent, two-layer agent loop, parallel/serial tool execution, hooks, queues/interrupt, transport/proxy.
 
-验收：113 tests 全绿（B01–B13、B15–B50 均有直接断言，B14 已实现）；另有跨模块 e2e：Agent → pi-ai Models → faux provider 全链路测试。
+Acceptance: 113 tests all green (B01–B13 and B15–B50 each have direct assertions, B14 is implemented); plus a cross-module e2e test: Agent → pi-ai Models → faux provider full path.
 
-### M5 pi-coding-agent SDK 层（主体已完成，收尾中）
+### M5 pi-coding-agent SDK layer (main work done, wrapping up)
 
-已完成：
-- `SessionManager`：会话 JSONL v1-v3 读写、延迟建文件、树/分支/fork、context_edit 投影、compaction 感知重建、统计、列表/恢复（55 tests）
-- `SettingsManager` + `TrustManager` + `Migrations`：两级合并、脏字段写回、defaultTools 修饰、trust.json、commands→prompts 迁移（42 tests）
-- `ModelRuntime` / `ProviderComposer` / `ModelResolver`：models.json 自定义 provider、apiKey 解析、模型解析与 thinking 后缀（47 tests）
-- 工具：read/write/edit/ls + grep/find（纯 Kotlin 无 rg/fd 依赖）+ bash（注入 ShellExecutor）+ truncate/path/mutation queue（95 tests）
-- 提示词：SystemPrompt sections/defaults/diff、ResourceLoader（AGENTS.md/SYSTEM.md/skills/prompts）、skills XML、prompt templates（62 tests）
-- `AgentSession` + `createAgentSession` + `AgentSessionRuntime` + `CodingHooks`（lead 实现，SDK 公开 API）
-- 端到端验证：Agent → StreamFn → ModelRuntime → faux provider；会话落盘/重开恢复（SdkIntegrationTest）
+Done:
+- `SessionManager`: session JSONL v1-v3 read/write, deferred file creation, tree/branch/fork, context_edit projection, compaction-aware rebuild, stats, list/resume (55 tests)
+- `SettingsManager` + `TrustManager` + `Migrations`: two-level merge, dirty-field write-back, defaultTools modifiers, trust.json, commands→prompts migration (42 tests)
+- `ModelRuntime` / `ProviderComposer` / `ModelResolver`: models.json custom providers, apiKey resolution, model resolution and thinking suffix (47 tests)
+- Tools: read/write/edit/ls + grep/find (pure Kotlin, no rg/fd dependency) + bash (injected ShellExecutor) + truncate/path/mutation queue (95 tests)
+- Prompts: SystemPrompt sections/defaults/diff, ResourceLoader (AGENTS.md/SYSTEM.md/skills/prompts), skills XML, prompt templates (62 tests)
+- `AgentSession` + `createAgentSession` + `AgentSessionRuntime` + `CodingHooks` (lead implementation, public SDK API)
+- End-to-end validation: Agent → StreamFn → ModelRuntime → faux provider; session persist/reopen resume (SdkIntegrationTest)
 
-验收：三模块 `./gradlew clean build` 全绿；pi-coding-agent 304 JVM tests + 304 Android host tests。
+Acceptance: `./gradlew clean build` green for all three modules; pi-coding-agent 304 JVM tests + 304 Android host tests.
 
-已完成收尾项：
-- compaction + branch summary 移植（`coding/compaction`，56 tests）；AgentSession 已接入：prompt 前自动压缩、上下文溢出的自动压缩恢复、`session.compact()` 公开 API
-- session 级自动重试（指数退避、context_edit 省略失败轮、retry 事件）
-- `UnixShellExecutor`（JVM/Android 共享源集，ProcessBuilder、超时/abort 杀进程树、尾部截断，13 tests）
-- SDK 开发者文档 `docs/SDK.md`
+Wrap-up items completed:
+- compaction + branch summary port (`coding/compaction`, 56 tests); wired into AgentSession: automatic compaction before prompt, automatic compaction recovery on context overflow, public `session.compact()` API
+- Session-level automatic retry (exponential backoff, context_edit omits the failed turn, retry events)
+- `UnixShellExecutor` (shared JVM/Android source set; ProcessBuilder, timeout/abort kills the process tree, tail truncation, 13 tests)
+- SDK developer docs `docs/SDK.md`
 
-已完成：
-- `AgentSessionRuntime.fork(entryId, summarizeAbandonedBranch = true)` 接入 branch summary
-- Maven 发布配置（`maven-publish`，`publishToMavenLocal` 产出 jvm jar/android aar/sources/pom，依赖正确）
+Done:
+- `AgentSessionRuntime.fork(entryId, summarizeAbandonedBranch = true)` wired to branch summary
+- Maven publishing configuration (`maven-publish`; `publishToMavenLocal` produces jvm jar/android aar/sources/pom with correct dependencies)
 
-已完成：
-- 示例工程：`examples/jvm-demo`（Gradle application，`./gradlew :examples:jvm-demo:run` 端到端打印流式回复并落会话文件）、`examples/android-demo`（独立 Gradle 工程，消费 mavenLocal 发布的 android 变体，产出 debug APK）
-- 根构建不再声明插件版本，各模块/示例自力声明版本（解决 AGP 9 application 与 KMP 的类路径冲突）；Android demo 使用经典 DSL + kotlin-android 2.4.21
+Done:
+- Example projects: `examples/jvm-demo` (Gradle application, `./gradlew :examples:jvm-demo:run` prints a streaming reply end-to-end and writes a session file), `examples/android-demo` (standalone Gradle project consuming the android variant published to mavenLocal, producing a debug APK)
+- The root build no longer declares plugin versions; each module/example declares its own (resolving the classpath conflict between AGP 9 application and KMP); the Android demo uses the classic DSL + kotlin-android 2.4.21
 
-剩余：
-- 扩展 hook 细化（custom message 持久化、input 流程）
+Remaining:
+- Extension hook refinements (custom message persistence, input flow)
 
-### M3 provider 矩阵（已完成）
+### M3 provider matrix (done)
 
-**10 个 chat API 全部实现**：openai-completions、openai-responses、openai-codex-responses、azure-openai-responses、anthropic-messages、google-generative-ai、google-vertex、mistral-conversations、bedrock-converse-stream（AWS SigV4 + 二进制 event stream）、pi-messages（radius 网关）。
+**All 10 chat APIs implemented**: openai-completions, openai-responses, openai-codex-responses, azure-openai-responses, anthropic-messages, google-generative-ai, google-vertex, mistral-conversations, bedrock-converse-stream (AWS SigV4 + binary event stream), pi-messages (radius gateway).
 
-**图片/分类器**：openrouter-images；typesafe-system-one、openai-decisions、cloudflare-workers-ai-system-one；Models 层 `generateImages`/`classify` 分发。
+**Images/classifiers**: openrouter-images; typesafe-system-one, openai-decisions, cloudflare-workers-ai-system-one; `generateImages`/`classify` dispatch in the Models layer.
 
-**OAuth 9 个流程全部实现**：anthropic、openai-chatgpt、github-copilot、openai-codex、xai、openrouter、kimi-coding、meta、radius。基础设施（纯 Kotlin SHA-256/PKCE、设备码轮询、本地回调服务器、凭据刷新写回）已完成并接入 builtinProviders 认证链（OAuth → auth.json api key → env）。
+**All 9 OAuth flows implemented**: anthropic, openai-chatgpt, github-copilot, openai-codex, xai, openrouter, kimi-coding, meta, radius. Infrastructure (pure Kotlin SHA-256/PKCE, device code polling, local callback server, credential refresh write-back) is complete and wired into the builtinProviders auth chain (OAuth → auth.json api key → env).
 
-模型目录 42 个 provider 全部可路由（typesafe 仅 classifier）。
+All 42 catalog providers can be routed (typesafe is classifier-only).
 
-已知偏差：codex 的 WebSocket 传输/zstd 压缩未实现（回退 SSE）；bedrock 凭据链仅 env/bearer（无 profile/IMDS/STS）；radius 动态目录仅留接口。
+Known deviations: codex WebSocket transport/zstd compression not implemented (falls back to SSE); bedrock credential chain is env/bearer only (no profile/IMDS/STS); radius dynamic catalog is interface-only.
 
-### M6 打磨与发布（已完成主体）
+### M6 Polish and release (main work done)
 
-- Maven 发布配置（jvm jar / android aar / sources / pom），`publishToMavenLocal` 可用
-- 示例工程：`examples/jvm-demo`（`./gradlew :examples:jvm-demo:run` 端到端跑通）、`examples/android-demo`（独立 Gradle 工程，消费发布产物，`scripts/build-android-demo.sh` 产出 debug APK）
-- SDK 使用文档 `docs/SDK.md`
-- 剩余可选：KDoc 全量、R8/体积与启动耗时测量、私有仓库发布
+- Maven publishing configuration (jvm jar / android aar / sources / pom), `publishToMavenLocal` works
+- Example projects: `examples/jvm-demo` (`./gradlew :examples:jvm-demo:run` works end-to-end), `examples/android-demo` (standalone Gradle project consuming published artifacts; `scripts/build-android-demo.sh` produces a debug APK)
+- SDK usage docs `docs/SDK.md`
+- Optional remaining: full KDoc, R8/size and startup-time measurements, private repository publishing
 
-## 最终验收（review 修复轮，0.1.0）
+## Final acceptance (review fix round, 0.1.0)
 
-针对外部 review 的 14 项 P1/P2 与完成度边界，本轮修复并验证：
+This round fixes and verifies the 14 P1/P2 items and completion-boundary issues raised by an external review:
 
-| review 项 | 修复 | 验证 |
+| Review item | Fix | Verification |
 |---|---|---|
-| P1.1 OAuth 刷新被绕过 | pi-ai 统一认证链 `ProviderAuthResolver`/`resolveAuthForProvider`：stored OAuth → 过期 refresh → `toAuth()`；coding `ModelRuntime` 不再预填 credential | pi-ai `ProviderAuthChainTest` 9 tests（refresh 请求/写回/headers）；coding `AuthScenarioTest` 2 tests（经 SDK 端到端） |
-| P1.2 abort/waitForIdle/close 未覆盖整次操作 | 会话级 `RunSignal` 覆盖重试等待/压缩/摘要；`waitForIdle` 等待整个 prompt 操作；`close()` suspend 且等操作结束、先 shutdown hook 再退订/关会话；Runtime 提供 suspend `close()` | `SessionLifecycleScenarioTest` 3 tests（重试等待 abort 不发第二次请求、waitForIdle 覆盖重试与整次操作） |
-| P1.3 溢出恢复缺 omitFailedTurn/次数边界 | 溢出分支先 `omitFailedTurn`（context_edit）+ 重建上下文，再自动压缩一次（split-turn 允许 history + turn-prefix 两次摘要），随后 continueRun | `OverflowRecoveryScenarioTest` 2 tests；不再出现 "Cannot continue from message role: assistant" |
-| P1.4 Android 示例线程错误 | 示例：session/prompt 全部在 IO，UI 经 Channel→Main；onDestroy suspend close；新增离线 faux / 本地 mock 模式 | 真机（Xiaomi rubypro/Android 13）离线 + `adb reverse` mock + 销毁重开；logcat 0 崩溃/ANR/NetworkOnMain，StrictMode 无应用帧违规；真机证据本地留存（不随公开仓库发布） |
-| P1.5 自定义 provider 仅 openai-completions | pi-ai `chatApiFactory` 覆盖全部 10 种 chat API；`ProviderComposer` 接入 | `ProtocolFactoriesTest` 10 API；coding 自定义 provider 真实请求到 anthropic/openai-responses 端点 |
-| P1.6 Cloudflare 未适配 | 新增 `CloudflareStream`/`CloudflareAuth`：URL 占位符替换、workers-ai Bearer、ai-gateway `cf-aig-authorization`（gateway token 优先） | `CloudflareProvidersTest` 7 tests（MockWebServer URL/headers） |
-| P1.7 defaultTools 未生效 | `createAgentSession` 用 `settings.getDefaultTools()` 过滤默认工具集 | `SessionConfigScenarioTest`（defaultTools/加减修饰） |
-| P1.8 静态 extra sections 首次 prompt 丢失 | `AgentSession` 保存 `staticSystemPromptSections` 并参与每次 sections 计算 | `SessionConfigScenarioTest` 首请求可见 |
-| P2.9 系统消息未持久化 | 初始 system 快照与 patch 均落 JSONL；恢复会话时从历史 system 消息重放 sections 基线 | `SessionContextScenarioTest`（JSONL system 条目/重开一致） |
-| P2.10 模型/thinking 语义丢失 | 显式 `options.model` 优先；`:thinking` 后缀与 `modelThinking`/默认 thinking 参与解析 | `SessionConfigScenarioTest` |
-| P2.11 事件订阅可能丢事件 | `MutableSharedFlow(SUSPEND, buffer=256)` + suspend `emit`；`subscribe` 用 `UNDISPATCHED` 立即收集 | `SessionContextScenarioTest` 仅经 `session.events` 校验完整序列 |
-| P2.12 grep/find 忽略语义 | 新增 `GitIgnoreMatcher`（嵌套/取反/目录/锚定/通配）；流式 limit 早停 + RunSignal 取消 | 44 tests（工具 + matcher + 早停/取消） |
-| P2.13 校验子集 | 补齐数字/字符串/数组约束、本地 `$ref`/`$defs`、21 个 format；错误文本 TypeBox 1.3.27 golden 逐字对照 | ValidationTest 35 tests（60 golden 断言） |
-| P2.14 PKCE 随机源 | `oauthRandomBytes` 默认 `platformSecureRandomBytes`（java.security.SecureRandom） | PkceTest + PlatformAbstractionTest |
-| 平台泄漏 | 平台差异收敛 `io.github.whywood.deepdeep.sdk.ai.platform`（time/random/env/atomic）；commonMain 无 `java.*` import | grep 校验 + `PlatformAbstractionTest` |
-| 发布不一致 | 版本统一 `0.1.0`；`jvmToolchain(17)` 产物 class major=61；双语 README、LICENSE、RELEASE 文档 | `scripts/verify-release.mjs` 32/32 PASS；`scripts/release-local.sh` 全流程通过 |
+| P1.1 OAuth refresh bypassed | Unified auth chain in pi-ai (`ProviderAuthResolver`/`resolveAuthForProvider`): stored OAuth → refresh when expired → `toAuth()`; coding `ModelRuntime` no longer pre-fills credentials | pi-ai `ProviderAuthChainTest` 9 tests (refresh request/write-back/headers); coding `AuthScenarioTest` 2 tests (end-to-end through the SDK) |
+| P1.2 abort/waitForIdle/close did not cover the whole operation | Session-level `RunSignal` covers retry waits/compaction/summarization; `waitForIdle` waits for the entire prompt operation; `close()` is suspend and waits for the operation to finish, running the shutdown hook before unsubscribing/closing the session; Runtime provides a suspend `close()` | `SessionLifecycleScenarioTest` 3 tests (aborting during a retry wait sends no second request; waitForIdle covers retries and the whole operation) |
+| P1.3 Overflow recovery lacked omitFailedTurn/attempt bounds | The overflow branch first calls `omitFailedTurn` (context_edit) + rebuilds context, then compacts automatically once (split-turn allows both history and turn-prefix summaries), then continues the run | `OverflowRecoveryScenarioTest` 2 tests; "Cannot continue from message role: assistant" no longer occurs |
+| P1.4 Android demo threading bug | Demo: all session/prompt work on IO, UI via Channel→Main; suspend close in onDestroy; added offline faux / local mock modes | Real device (Xiaomi rubypro/Android 13): offline + `adb reverse` mock + destroy/relaunch; logcat shows 0 crashes/ANR/NetworkOnMain, no StrictMode violations in app frames; device evidence kept locally (not published with the public repository) |
+| P1.5 Custom providers only supported openai-completions | pi-ai `chatApiFactory` covers all 10 chat APIs; `ProviderComposer` wired in | `ProtocolFactoriesTest` 10 APIs; a coding custom provider makes real requests to anthropic/openai-responses endpoints |
+| P1.6 Cloudflare not adapted | Added `CloudflareStream`/`CloudflareAuth`: URL placeholder substitution, workers-ai Bearer, ai-gateway `cf-aig-authorization` (gateway token takes precedence) | `CloudflareProvidersTest` 7 tests (MockWebServer URL/headers) |
+| P1.7 defaultTools had no effect | `createAgentSession` filters the default tool set with `settings.getDefaultTools()` | `SessionConfigScenarioTest` (defaultTools/add-remove modifiers) |
+| P1.8 Static extra sections were lost on the first prompt | `AgentSession` stores `staticSystemPromptSections` and includes them in every sections computation | `SessionConfigScenarioTest`, visible in the first request |
+| P2.9 System messages were not persisted | Both the initial system snapshot and patches are written to JSONL; on resume, the sections baseline is replayed from historical system messages | `SessionContextScenarioTest` (JSONL system entries/consistency after reopening) |
+| P2.10 Model/thinking semantics were lost | Explicit `options.model` takes precedence; the `:thinking` suffix and `modelThinking`/default thinking participate in resolution | `SessionConfigScenarioTest` |
+| P2.11 Event subscription could drop events | `MutableSharedFlow(SUSPEND, buffer=256)` + suspend `emit`; `subscribe` collects immediately with `UNDISPATCHED` | `SessionContextScenarioTest`, full sequence verified only through `session.events` |
+| P2.12 grep/find ignore semantics | Added `GitIgnoreMatcher` (nested/negation/directory/anchored/glob); streaming early stop on limit + RunSignal cancellation | 44 tests (tools + matcher + early stop/cancellation) |
+| P2.13 Validation subset | Added numeric/string/array constraints, local `$ref`/`$defs`, 21 formats; error text compared verbatim against TypeBox 1.3.27 goldens | ValidationTest 35 tests (60 golden assertions) |
+| P2.14 PKCE randomness source | `oauthRandomBytes` defaults to `platformSecureRandomBytes` (`java.security.SecureRandom`) | PkceTest + PlatformAbstractionTest |
+| Platform leakage | Platform differences converge in `io.github.whywood.deepdeep.sdk.ai.platform` (time/random/env/atomic); commonMain has no `java.*` imports | grep check + `PlatformAbstractionTest` |
+| Release inconsistency | Version unified at `0.1.0`; `jvmToolchain(17)` artifacts have class major=61; bilingual README, LICENSE, RELEASE docs | `scripts/verify-release.mjs` 32/32 PASS; `scripts/release-local.sh` full run passes |
 
-测试不足项同步补齐：固定 JSONL/协议 fixture（TS 格式手写，默认可运行）、真实数据扫描改 `PI2K_REAL_SESSIONS_DIR` opt-in、SDK 组合场景 18 tests。
+Test gaps were filled at the same time: fixed JSONL/protocol fixtures (hand-written in TS format, runnable by default), real-data scanning moved behind the `PI2K_REAL_SESSIONS_DIR` opt-in, and 18 SDK combination scenarios.
 
-## 复核第二轮（0.1.1）
+## Second review round (0.1.1)
 
-对外部 review 在 `b520ce2` / `v0.1.0` 上提出的 8 项问题逐条修复（Android Demo 真机项按用户要求不处理）：
+Fixes the eight issues an external review raised on `b520ce2` / `v0.1.0`, one by one (the Android demo device item is left as-is per the user's request):
 
-| 项 | 问题 | 修复 | 验证 |
+| Item | Problem | Fix | Verification |
 |---|---|---|---|
-| P1 | Cloudflare 系统环境变量未进入 URL 替换 | `ResolvedAuth.env` 携带认证阶段解析出的 account/gateway/token；Models 先 resolveAuth → 合并 env（caller 优先）→ transformModel → 分发 | 新增 3 个"仅系统环境变量"用例（workers-ai / gateway URL + headers）；pi-ai 628 tests |
-| P1 | 手动 `compact()` 未登记为会话操作，fork 分支摘要 signal 为 null | 新增 `runOperation`：prompt / 手动 compact 统一登记 activeOperation + RunSignal（busy/abort/waitForIdle/close 全覆盖）；手动压缩在忙时先 abort+waitForIdle；fork 分支摘要建独立 RunSignal 并绑定协程取消，`finally` 关闭源会话 | `OperationLifecycleScenarioTest`：压缩中 isBusy、waitForIdle 等待、abort 返回 null 且 Started/Failed 各 1、无 Finished |
-| P1 | 完成信号在可取消 emit 之后，背压下永久挂起 | `finally` 中先 `operation.complete()`，再 `NonCancellable + withTimeoutOrNull(5s)` 发送 Settled | 慢订阅者 + 缓冲区填满 + 取消 prompt 后 `waitForIdle()` 在超时内返回 |
-| P2 | 子目录搜索不继承上层 .gitignore | 忽略层级根改为 cwd（searchPath 在 cwd 内时）；searchPath 在 cwd 外仍用自身为根 | 新增 3 个继承用例 + cwd 外根语义；51 tools tests |
-| P2 | 默认模型解析丢弃 thinking 后缀 | `resolveDefault()` 只解析一次，其 thinkingLevel 参与优先级链 | `enabledModels:["faux/faux-1:high"]` 且无显式 model → `thinkingLevel=="high"` |
-| P2 | 阈值压缩重复 Finished、Started 过晚 | Started 在摘要前发送；Finished/Failed 只在 `compactInternal` 发一次；`applyCompaction` 不再发事件 | 阈值压缩用例断言 Started=1 / Finished=1 / Failed=0，CompactionEntry=1 |
-| P2 | 中止重试后 retryAttempt 泄漏到下一轮 | `runOperation` 进入与退出都重置 retryAttempt | 第一轮重试等待中 abort，第二轮仍能重试一次并成功 |
-| — | grep >16MiB 静默跳过、整文件读取 | 改为流式逐行读取 + 上下文环形缓冲；跳过计数，无匹配时明确提示 skipped；重叠 context 合并 | 大文件跳过提示/有匹配不影响用例；跨行重叠合并用例 |
-| — | `verify-release.mjs` sources 路径错误、只检查第一个 class | sources jar 路径修正并新增 android sources 检查；抽样/全量检查 class major | 0.1.1 发布校验 35/35 PASS |
+| P1 | Cloudflare system environment variables did not reach URL substitution | `ResolvedAuth.env` carries the account/gateway/token resolved during auth; Models does resolveAuth → merge env (caller wins) → transformModel → dispatch | Added 3 "system environment variables only" cases (workers-ai / gateway URL + headers); pi-ai 628 tests |
+| P1 | Manual `compact()` was not registered as a session operation; the fork branch summary had a null signal | Added `runOperation`: prompt / manual compact both register activeOperation + RunSignal (fully covers busy/abort/waitForIdle/close); when busy, manual compaction first aborts + waits for idle; the fork branch summary gets its own RunSignal bound to coroutine cancellation, and `finally` closes the source session | `OperationLifecycleScenarioTest`: isBusy during compaction, waitForIdle waits, abort returns null with exactly one Started and one Failed, no Finished |
+| P1 | The completion signal came after a cancellable emit, causing a permanent hang under backpressure | In `finally`, call `operation.complete()` first, then send Settled with `NonCancellable + withTimeoutOrNull(5s)` | With a slow subscriber, a full buffer, and a cancelled prompt, `waitForIdle()` returns within the timeout |
+| P2 | Subdirectory searches did not inherit parent .gitignore | The ignore hierarchy root is now cwd (when searchPath is inside cwd); a searchPath outside cwd still uses itself as root | Added 3 inheritance cases + out-of-cwd root semantics; 51 tools tests |
+| P2 | Default model resolution dropped the thinking suffix | `resolveDefault()` resolves only once, and its thinkingLevel participates in the precedence chain | With `enabledModels:["faux/faux-1:high"]` and no explicit model → `thinkingLevel=="high"` |
+| P2 | Threshold compaction emitted duplicate Finished and Started too late | Started is emitted before the summary; Finished/Failed are emitted once in `compactInternal`; `applyCompaction` no longer emits events | Threshold compaction case asserts Started=1 / Finished=1 / Failed=0, CompactionEntry=1 |
+| P2 | retryAttempt leaked into the next turn after aborting a retry | `runOperation` resets retryAttempt on both entry and exit | Abort during the first turn's retry wait; the second turn still retries once and succeeds |
+| — | grep silently skipped files >16MiB and read whole files | Changed to streaming line-by-line reads + a ring buffer for context; skip counting, an explicit skipped notice when there are no matches; overlapping context merged | Large-file skip notice / matching case unaffected; cross-line overlap merge case |
+| — | `verify-release.mjs` used a wrong sources path and only checked the first class | Fixed the sources jar path and added an Android sources check; sampled/full class major checks | 0.1.1 release verification 35/35 PASS |
 
-## MCP 0.2.0（已实施）
+## MCP 0.2.0 (implemented)
 
-| 能力 | 实现 |
+| Capability | Implementation |
 |---|---|
-| `pi-mcp` 模块 | JSON-RPC 2.0 codec、McpClient（initialize/分页 tools/resources/prompts/call/ping/通知/取消/超时）、SSE 解析、Streamable HTTP（session id、协议版本、GET 通知流、Last-Event-ID 重连、DELETE）、JVM stdio（进程清理）、OAuth 2.1（发现/DCR/PKCE/refresh/step-up/token 持久化/loopback） |
-| 配置 | `<agentDir>/mcp.json` + 受信任项目 `.pi/mcp.json`；`mcpServers` 兼容 pi；stdio/http、exposure/toolExposure、timeout、oauth；`${ENV}` 插值；`!cmd` 拒绝；项目仅覆盖 enabled/exposure/toolExposure |
-| 工具 | `mcp__<server>__<tool>` 命名与冲突 hash；direct/deferred/codemode(→deferred)/hidden；`tool_search`（BM25 + 中文 2-gram，结果写入 `mcp_loaded_tools` 并在同一 run 的下一轮生效）；结果 text/image/audio/resource 映射、20KB 截断、structuredContent、progress→onUpdate、isError |
-| 资源 | 三个资源工具（单/多 server 聚合），二进制落盘 |
+| `pi-mcp` module | JSON-RPC 2.0 codec, McpClient (initialize/paginated tools/resources/prompts/call/ping/notifications/cancel/timeouts), SSE parsing, Streamable HTTP (session id, protocol version, GET notification stream, Last-Event-ID reconnect, DELETE), JVM stdio (process cleanup), OAuth 2.1 (discovery/DCR/PKCE/refresh/step-up/token persistence/loopback) |
+| Configuration | `<agentDir>/mcp.json` + trusted project `.pi/mcp.json`; `mcpServers` compatible with pi; stdio/http, exposure/toolExposure, timeout, oauth; `${ENV}` interpolation; `!cmd` rejected; project entries can only override enabled/exposure/toolExposure |
+| Tools | `mcp__<server>__<tool>` naming with conflict hashing; direct/deferred/codemode(→deferred)/hidden; `tool_search` (BM25 + Chinese 2-gram; results written to `mcp_loaded_tools` and effective on the next turn of the same run); result mapping for text/image/audio/resource, 20KB truncation, structuredContent, progress→onUpdate, isError |
+| Resources | Three resource tools (single/multi-server aggregation), binaries written to disk |
 | prompts | `listPrompts`/`promptMcp`/`/mcp__server__prompt` |
-| 运行时 | `session.mcp`：servers 状态、add/remove/reconnect/reload/setEnabled/healthCheck/tools/prompts/readResource/signIn；SessionEvent 增加 MCP 状态/工具/日志/登录事件 |
-| pi-agent | `AgentOptions/AgentLoopConfig.getActiveTools`，每轮刷新工具并写 toolsAdded/Removed 补丁，支持 run 中 deferred 工具加载 |
-| 测试 | pi-mcp 141（协议/HTTP/stdio/OAuth）；coding 新增 adapter/resources/tool_search/prompts/manager/端到端场景；Android host 编译 + 纯协议测试 |
-| 示例/文档 | `examples/mcp-demo`（本地 mock MCP server + deferred + tool_search）、`docs/MCP.md`、README 中英文 |
+| Runtime | `session.mcp`: server status, add/remove/reconnect/reload/setEnabled/healthCheck/tools/prompts/readResource/signIn; SessionEvent gains MCP status/tool/log/sign-in events |
+| pi-agent | `AgentOptions/AgentLoopConfig.getActiveTools`, refreshing tools each turn and writing toolsAdded/Removed patches, supporting deferred tool loading during a run |
+| Tests | pi-mcp 141 (protocol/HTTP/stdio/OAuth); coding gains adapter/resources/tool_search/prompts/manager/end-to-end scenarios; Android host compilation + pure protocol tests |
+| Examples/docs | `examples/mcp-demo` (local mock MCP server + deferred + tool_search), `docs/MCP.md`, README in both languages |

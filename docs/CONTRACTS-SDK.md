@@ -1,8 +1,8 @@
-# pi-coding-agent SDK 契约（M5）
+# pi-coding-agent SDK contract (M5)
 
-所有新代码在 `pi-coding-agent/src/commonMain/kotlin/io/github/whywood/deepdeep/sdk/coding/`，测试在 `commonTest`。平台无关：只用 okio（`okio.FileSystem`/`Path`）、kotlinx.serialization、coroutines；禁止 `java.*`、`File`、`ProcessBuilder`、`System.getenv`。
+All new code goes in `pi-coding-agent/src/commonMain/kotlin/io/github/whywood/deepdeep/sdk/coding/`, tests in `commonTest`. Platform-agnostic: only okio (`okio.FileSystem`/`Path`), kotlinx.serialization, coroutines; `java.*`, `File`, `ProcessBuilder`, and `System.getenv` are forbidden.
 
-## 通用
+## General
 
 ```kotlin
 // paths/AgentPaths.kt
@@ -17,20 +17,20 @@ class AgentPaths(val cwd: Path, val agentDir: Path) {
 
 // json/Jsonc.kt
 object Jsonc {
-    fun parse(text: String): JsonElement   // 允许 // 与 /* */ 注释、尾逗号；失败抛 IllegalArgumentException
+    fun parse(text: String): JsonElement   // allows // and /* */ comments and trailing commas; throws IllegalArgumentException on failure
 }
 ```
 
-## 1. session（task-9）
+## 1. session (task-9)
 
-`session/SessionEntry.kt`：`SessionHeader` + 11 种条目（格式见 `docs/analysis/pi-coding-agent-formats.md` §2.3-2.5，字段名逐字一致）。
+`session/SessionEntry.kt`: `SessionHeader` + 11 entry kinds (format in `docs/analysis/pi-coding-agent-formats.md` §2.3-2.5; field names verbatim).
 
 ```kotlin
 sealed interface SessionEntry {
     val type: String
     val id: String
     val parentId: String?
-    val timestamp: String        // ISO-8601 字符串
+    val timestamp: String        // ISO-8601 string
 }
 
 class SessionMessageEntry(... val message: Message) : SessionEntry
@@ -46,7 +46,7 @@ class LabelEntry(... val targetId: String, val label: String?) : SessionEntry
 class SessionInfoEntry(... val name: String?) : SessionEntry
 ```
 
-`session/SessionManager.kt`：
+`session/SessionManager.kt`:
 
 ```kotlin
 class SessionManager {
@@ -55,7 +55,7 @@ class SessionManager {
         suspend fun open(file: Path, fs: FileSystem): SessionManager
         suspend fun continueRecent(paths: AgentPaths, fs: FileSystem): SessionManager?
         fun inMemory(cwd: Path): SessionManager
-        suspend fun list(paths: AgentPaths, fs: FileSystem): List<SessionInfo>       // 元信息：id/file/cwd/timestamp/name/messageCount
+        suspend fun list(paths: AgentPaths, fs: FileSystem): List<SessionInfo>       // metadata: id/file/cwd/timestamp/name/messageCount
         suspend fun findById(sessionId: String, paths: AgentPaths, fs: FileSystem): SessionManager?
     }
 
@@ -67,13 +67,13 @@ class SessionManager {
     fun getEntries(): List<SessionEntry>
     fun getEntry(id: String): SessionEntry?
     fun getLeafId(): String?
-    fun getBranch(fromId: String? = null): List<SessionEntry>            // 默认从 leaf 回溯
+    fun getBranch(fromId: String? = null): List<SessionEntry>            // walks back from leaf by default
     fun getSessionName(): String?
     fun getTree(): List<TreeNode>                                        // TreeNode(entry, children)
-    fun buildSessionProjection(): List<SessionEntry>                     // 应用 context_edit
-    fun buildContextEntries(): List<SessionEntry>                        // compaction 感知
+    fun buildSessionProjection(): List<SessionEntry>                     // applies context_edit
+    fun buildContextEntries(): List<SessionEntry>                        // compaction-aware
     fun buildSessionContext(): SessionContext                            // messages + provider/model + thinkingLevel
-    fun getSessionStats(): SessionStats                                  // tokens/cost 累计（usage 条目 + assistant usage）
+    fun getSessionStats(): SessionStats                                  // accumulated tokens/cost (usage entries + assistant usage)
 
     suspend fun appendMessage(message: Message): SessionMessageEntry
     suspend fun appendThinkingLevelChange(level: String): ThinkingLevelChangeEntry
@@ -100,11 +100,11 @@ data class SessionStats(val inputTokens: Long, val outputTokens: Long, val cache
 class TreeNode(val entry: SessionEntry, val children: List<TreeNode>)
 ```
 
-必须复刻：延迟建文件（第一条 user/assistant message 才落盘，之前条目在内存）、追加写、v1-v3 迁移读取、cwd 编码、uuidv7/8 位 hex id、context_edit 投影、compaction 感知重建。
+Must be replicated: deferred file creation (the file is created only on the first user/assistant message; earlier entries stay in memory), append-only writes, v1-v3 migration on read, cwd encoding, uuidv7/8-hex ids, context_edit projection, compaction-aware rebuild.
 
-## 2. settings（task-10）
+## 2. settings (task-10)
 
-`settings/PiSettings.kt`：完整 settings 模型（字段全集见 formats 文档 §3.2），默认值见上游 `settings-defaults.ts`。
+`settings/PiSettings.kt`: the full settings model (all fields in the formats doc §3.2); defaults follow upstream `settings-defaults.ts`.
 
 ```kotlin
 @Serializable data class PiSettings(
@@ -138,7 +138,7 @@ class SettingsManager {
     fun getDefaultModel(): Pair<String, String>?     // provider to modelId
     fun getDefaultThinkingLevel(): String?
     fun getEnabledModels(): List<String>?
-    fun getDefaultTools(): List<String>              // 含 +/- 修饰规则（formats §3.3）
+    fun getDefaultTools(): List<String>              // includes +/- modifier rules (formats §3.3)
     fun getSteeringMode(): String
     fun getFollowUpMode(): String
     fun getRetrySettings(): RetrySettings
@@ -148,19 +148,19 @@ class SettingsManager {
     fun getModelThinkingLevel(provider: String, modelId: String): String?
 }
 ```
-两级 global+project 合并（数组并集/覆盖规则按上游），写回只写脏字段且保留未知字段，原子写（tmp+move）。
+Two-level global+project merge (array union/override rules per upstream), write-back touches only dirty fields and preserves unknown ones, atomic writes (tmp+move).
 
-## 3. models（task-11）
+## 3. models (task-11)
 
 ```kotlin
 // models/CustomModels.kt
 data class CustomModelConfig(val id, val name?, val reasoning?, val input?, val contextWindow?, val maxTokens?, val cost?...)
 data class CustomProviderConfig(val id: String?, val baseUrl, val api, val apiKey?, val headers?, val models: List<CustomModelConfig>, val authHeader: String? = null)
-object CustomModelsLoader { fun parse(text: String): List<CustomProviderConfig> }   // models.json 的 providers 段
+object CustomModelsLoader { fun parse(text: String): List<CustomProviderConfig> }   // the providers section of models.json
 
 // models/ModelRuntime.kt
 class ModelRuntime(
-    val models: Models,                     // pi-ai，由 createDefaultModels() + 自定义 provider 构建
+    val models: Models,                     // pi-ai, built from createDefaultModels() + custom providers
     val credentialStore: CredentialStore,
     val env: Map<String, String> = emptyMap(),
 ) {
@@ -178,14 +178,14 @@ class ModelRuntime(
 
 // models/ModelResolver.kt
 class ModelResolver(private val runtime: ModelRuntime, private val defaultProvider: String?, private val defaultModel: String?, private val enabledModels: List<String>?) {
-    suspend fun resolve(spec: String): ResolvedModel          // "provider/id"、"id"、模糊匹配、":thinking" 后缀
+    suspend fun resolve(spec: String): ResolvedModel          // "provider/id", "id", fuzzy matching, ":thinking" suffix
     suspend fun resolveDefault(): ResolvedModel?
 }
 data class ResolvedModel(val model: Model, val thinkingLevel: String?)
 ```
-models.json 自定义 provider：`apiKey` 写进 provider auth；`authHeader` 等按上游 provider-composer。
+models.json custom providers: `apiKey` goes into provider auth; `authHeader` and so on follow upstream provider-composer.
 
-## 4. tools（task-12 / task-13）
+## 4. tools (task-12 / task-13)
 
 ```kotlin
 // tools/ToolSupport.kt
@@ -205,7 +205,7 @@ class ToolOutput(val content: String, val details: JsonValue? = null)
 fun textResult(text: String, details: JsonValue? = null, isError: Boolean = false): AgentToolResult
 
 // tools/PathUtils.kt
-fun resolveToolPath(cwd: Path, input: String): Path     // 相对 cwd、展开 ~、规范化
+fun resolveToolPath(cwd: Path, input: String): Path     // relative to cwd, expands ~, normalizes
 // tools/Truncate.kt
 data class Truncated(val text: String, val truncated: Boolean, val truncatedBy: String? = null)
 fun truncateHead(text: String, maxLines: Int = 2000, maxBytes: Int = 50_000): Truncated
@@ -214,19 +214,19 @@ fun truncateTail(...); fun truncateLine(line: String, maxChars: Int): String
 class FileMutationQueue { suspend fun <T> withFile(path: Path, block: suspend () -> T): T }
 ```
 
-工具（行为与提示语按 `docs/analysis/pi-coding-agent.md` §6 与上游源码）：
+Tools (behavior and prompt text per `docs/analysis/pi-coding-agent.md` §6 and upstream source):
 
-- task-12：`read`、`write`、`edit`、`ls`（纯 Kotlin/okio；edit 返回 diff 摘要 + 首变更行；BOM/CRLF 归一化；write 建父目录；read 行/字节双截断、offset/limit、二进制与大文件处理）
-- task-13：`grep`、`find`（**不依赖 rg/fd，纯 Kotlin 实现**：okio 递归遍历 + 可配置忽略目录、glob→Regex、正则/字面量/忽略大小写/上下文行/limit；输出格式、截断与提示语对齐上游文本）、`bash`（`ShellExecutor` 接口注入，默认实现不提供；没有 executor 时工具返回明确错误）
-- `tools/CodingTools.kt`：`fun defaultCodingTools(cwd, fs, mutationQueue, shellExecutor?): List<CodingTool>`
+- task-12: `read`, `write`, `edit`, `ls` (pure Kotlin/okio; edit returns a diff summary + first changed line; BOM/CRLF normalization; write creates parent directories; read truncates by both lines and bytes, supports offset/limit, and handles binaries and large files)
+- task-13: `grep`, `find` (**no rg/fd dependency, pure Kotlin**: okio recursive traversal + configurable ignored directories, glob→Regex, regex/literal/ignore-case/context lines/limit; output format, truncation, and prompt text aligned with upstream text), `bash` (`ShellExecutor` injected via interface, no default implementation; without an executor the tool returns an explicit error)
+- `tools/CodingTools.kt`: `fun defaultCodingTools(cwd, fs, mutationQueue, shellExecutor?): List<CodingTool>`
 
-## 5. prompt（task-14）
+## 5. prompt (task-14)
 
 ```kotlin
 // prompt/SystemPrompt.kt
-class SystemPromptSections(val sections: Map<String, String>)          // 顺序敏感：preamble,tools,rules,docs,addendum,project_context,skills,cwd
+class SystemPromptSections(val sections: Map<String, String>)          // order-sensitive: preamble,tools,rules,docs,addendum,project_context,skills,cwd
 fun buildSystemPrompt(input: SystemPromptInput): SystemPromptSections
-fun diffSystemPromptSections(previous: SystemPromptSections?, current: SystemPromptSections): JsonObject   // null 值=删除
+fun diffSystemPromptSections(previous: SystemPromptSections?, current: SystemPromptSections): JsonObject   // null value = delete
 class SystemPromptInput(val preamble: String? = null, val toolSnippets: List<String>, val toolGuidelines: List<String>, val docsPaths: List<String>, val addendum: String?, val projectInstructions: List<ContextFile>, val skills: List<Skill>, val cwd: Path)
 
 // prompt/ResourceLoader.kt
@@ -243,19 +243,19 @@ data class LoadedResources(
 data class ContextFile(val path: Path, val content: String)
 data class Skill(val name: String, val description: String, val filePath: String, val content: String)
 data class PromptTemplate(val name: String, val description: String?, val content: String)
-fun renderAvailableSkills(skills: List<Skill>): String     // <available_skills> XML，与上游逐字一致
-class PromptTemplateExpander { fun expand(text: String): String }   // /template 展开（参数替换规则按上游）
+fun renderAvailableSkills(skills: List<Skill>): String     // <available_skills> XML, verbatim with upstream
+class PromptTemplateExpander { fun expand(text: String): String }   // /template expansion (argument substitution rules per upstream)
 ```
 
-默认提示词文本逐字移植上游 `core/system-prompt.ts` 与 `core/skills.ts` 的模板；上下文文件规则：`AGENTS.md`/`AGENTS.override.md`/`CLAUDE.md`、`SYSTEM.md`/`APPEND_SYSTEM.md`（formats §12）。
+Default prompt text is ported verbatim from upstream `core/system-prompt.ts` and `core/skills.ts` templates; context file rules: `AGENTS.md`/`AGENTS.override.md`/`CLAUDE.md`, `SYSTEM.md`/`APPEND_SYSTEM.md` (formats §12).
 
-## AgentSession（lead 负责，其他人不要写）
+## AgentSession (lead-owned; nobody else writes it)
 
-`session/AgentSession.kt`、`AgentSdk.kt`（createAgentSession）由 lead 实现，依赖以上契约。
+`session/AgentSession.kt` and `AgentSdk.kt` (createAgentSession) are implemented by the lead and depend on the contracts above.
 
-## 通用约束
+## General constraints
 
-- Kotlin 代码无注释；JSON 字段名 camelCase 与上游一致；错误文案与上游逐字一致（模型依赖）。
-- 文件只写自己任务声明的范围；不改 build.gradle.kts、不改 pi-ai/pi-agent。
-- 验证：`./gradlew :pi-coding-agent:jvmTest --no-daemon`（首次编译约 1 分钟）。不要并发跑全仓 build。
-- 完成后 complete task + send_message 给 lead：文件清单、测试数、偏差、遗留。
+- Kotlin code has no comments; JSON field names are camelCase matching upstream; error text is verbatim with upstream (the model depends on it).
+- Only write files in your own task's declared scope; do not change build.gradle.kts, pi-ai, or pi-agent.
+- Verification: `./gradlew :pi-coding-agent:jvmTest --no-daemon` (about 1 minute on first compile). Do not run a full-repo build concurrently.
+- When done, complete the task + send_message to the lead: file list, test count, deviations, and open items.

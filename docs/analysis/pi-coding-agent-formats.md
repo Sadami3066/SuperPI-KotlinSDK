@@ -1,110 +1,110 @@
-# pi-coding-agent 兼容格式规范（Kotlin 实现照做版）
+# pi-coding-agent compatibility format spec (Kotlin implementation-ready)
 
-目标：给 Kotlin 实现者一份"照做即可与现有 pi 1.3.0 互操作"的精确格式清单。每条给出 `文件:行` 依据与真实样本。
+Goal: give Kotlin implementers a precise format checklist that "interoperates with existing pi 1.3.0 by following it". Each item includes `file:line` evidence and real samples.
 
-兼容等级约定：
+Compatibility levels:
 
-- **R（读兼容）**：能正确解析既有文件，不需要能写。
-- **W（写兼容）**：写出的文件能被真 pi 正确解析。
-- **P（协议兼容）**：线上/管道格式逐字段一致。
+- **R (read compatible)**: can correctly parse existing files; writing is not required.
+- **W (write compatible)**: written files can be parsed correctly by real pi.
+- **P (protocol compatible)**: wire/pipe formats match field by field.
 
-凡是标 **R+W** 的，必须做双向黄金测试（用真 pi 生成、Kotlin 读取与写回、再用真 pi 打开）。
+Anything marked **R+W** requires bidirectional golden tests (generate with real pi, read and write back with Kotlin, then open with real pi again).
 
 ---
 
-## 1. 数据根与路径规则
+## 1. Data roots and path rules
 
-### 1.1 配置目录
+### 1.1 Configuration directories
 
-| 路径 | 内容 | 依据 |
+| Path | Contents | Evidence |
 |---|---|---|
-| `$PI_CODING_AGENT_DIR` 或 `~/.pi/agent` | agent 目录（默认） | `src/config.ts:605-612`，`src/cli/args.ts:462` |
-| `<agent-dir>/settings.json` | 用户级设置 | `docs/configuration.md:13` |
-| `<agent-dir>/auth.json` | API key 与 OAuth 凭据（0600） | `src/core/auth-storage.ts:64-79` |
-| `<agent-dir>/models.json` | 自定义 Provider/模型/覆盖 | `docs/configuration.md:16` |
-| `<agent-dir>/models-store.json`（+`.lock/`） | 动态模型目录缓存 | `src/core/models-store.ts:54-60` |
-| `<agent-dir>/mcp.json` | MCP server | `docs/mcp.md:32` |
-| `<agent-dir>/mcp-auth.json` | MCP OAuth 凭据 | `docs/mcp.md:129` |
-| `<agent-dir>/mcp-cache.json` / `mcp.log` | MCP 缓存与日志 | 本机实测；`docs/mcp.md:98` |
-| `<agent-dir>/trust.json` | 项目信任决策 | `src/core/trust-manager.ts:17` |
-| `<agent-dir>/keybindings.json` | 键位覆盖 | `docs/keybindings.md:9` |
-| `<agent-dir>/AGENTS.md` / `AGENTS.override.md` / `CLAUDE.md` | 全局上下文 | `src/core/resource-loader.ts:184-199` |
-| `<agent-dir>/SYSTEM.md` / `APPEND_SYSTEM.md` | 替换/追加 system prompt | `src/core/resource-loader.ts:1213-1240` |
-| `<agent-dir>/extensions/` | 用户扩展 | `docs/configuration.md:21` |
-| `<agent-dir>/skills/` | 用户技能 | `docs/configuration.md:22` |
-| `<agent-dir>/prompts/` | 用户 prompt 模板（旧名 `commands/` 会被迁移） | `src/migrations.ts:137-155` |
-| `<agent-dir>/themes/` | 用户主题 | `docs/configuration.md:24` |
-| `<agent-dir>/sessions/--<encoded-cwd>--/` | 会话 JSONL | `src/core/session-manager.ts:589-598` |
-| `<agent-dir>/bin/` | 托管二进制（fd、rg） | `src/config.ts:639-643`，`src/utils/tools-manager.ts:11` |
-| `<agent-dir>/npm/` | 包安装根（`node_modules`、`package.json`） | 本机实测，`docs/packages.md:33` |
-| `<cwd>/.pi/...` | 项目级同名资源（需项目信任） | `docs/configuration.md:26-38` |
-| `~/.agents/skills/`、`<cwd 祖先>/.agents/skills/` | Agent Skills 兼容目录（后者需信任） | `src/core/package-manager.ts:2464-2570`，`src/core/trust-manager.ts:181-197` |
+| `$PI_CODING_AGENT_DIR` or `~/.pi/agent` | Agent directory (default) | `src/config.ts:605-612`, `src/cli/args.ts:462` |
+| `<agent-dir>/settings.json` | User-level settings | `docs/configuration.md:13` |
+| `<agent-dir>/auth.json` | API keys and OAuth credentials (0600) | `src/core/auth-storage.ts:64-79` |
+| `<agent-dir>/models.json` | Custom providers/models/overrides | `docs/configuration.md:16` |
+| `<agent-dir>/models-store.json` (+`.lock/`) | Dynamic model catalog cache | `src/core/models-store.ts:54-60` |
+| `<agent-dir>/mcp.json` | MCP servers | `docs/mcp.md:32` |
+| `<agent-dir>/mcp-auth.json` | MCP OAuth credentials | `docs/mcp.md:129` |
+| `<agent-dir>/mcp-cache.json` / `mcp.log` | MCP cache and logs | Measured locally; `docs/mcp.md:98` |
+| `<agent-dir>/trust.json` | Project trust decisions | `src/core/trust-manager.ts:17` |
+| `<agent-dir>/keybindings.json` | Keybinding overrides | `docs/keybindings.md:9` |
+| `<agent-dir>/AGENTS.md` / `AGENTS.override.md` / `CLAUDE.md` | Global context | `src/core/resource-loader.ts:184-199` |
+| `<agent-dir>/SYSTEM.md` / `APPEND_SYSTEM.md` | Replace/append the system prompt | `src/core/resource-loader.ts:1213-1240` |
+| `<agent-dir>/extensions/` | User extensions | `docs/configuration.md:21` |
+| `<agent-dir>/skills/` | User skills | `docs/configuration.md:22` |
+| `<agent-dir>/prompts/` | User prompt templates (the old name `commands/` is migrated) | `src/migrations.ts:137-155` |
+| `<agent-dir>/themes/` | User themes | `docs/configuration.md:24` |
+| `<agent-dir>/sessions/--<encoded-cwd>--/` | Session JSONL | `src/core/session-manager.ts:589-598` |
+| `<agent-dir>/bin/` | Managed binaries (fd, rg) | `src/config.ts:639-643`, `src/utils/tools-manager.ts:11` |
+| `<agent-dir>/npm/` | Package install root (`node_modules`, `package.json`) | Measured locally, `docs/packages.md:33` |
+| `<cwd>/.pi/...` | Project-level resources of the same names (requires project trust) | `docs/configuration.md:26-38` |
+| `~/.agents/skills/`, `<cwd ancestors>/.agents/skills/` | Agent Skills compatibility directories (the latter requires trust) | `src/core/package-manager.ts:2464-2570`, `src/core/trust-manager.ts:181-197` |
 
-### 1.2 环境变量
+### 1.2 Environment variables
 
-进程配置（`docs/environment-variables.md:77-100`，`src/config.ts:584-586`）：
+Process configuration (`docs/environment-variables.md:77-100`, `src/config.ts:584-586`):
 
-| 变量 | 作用 |
+| Variable | Effect |
 |---|---|
-| `PI_CODING_AGENT_DIR` | 覆盖 agent 目录 |
-| `PI_CODING_AGENT_SESSION_DIR` | 覆盖会话目录（`--session-dir` 优先） |
-| `PI_PACKAGE_DIR` | 覆盖包目录（Nix/Guix） |
-| `PI_OFFLINE` | `1`/`true`/`yes` 关闭联网（并置 `PI_SKIP_VERSION_CHECK=1`，`src/main.ts:579-583`） |
-| `PI_SKIP_VERSION_CHECK` | 关闭 pi.dev 版本检查 |
-| `PI_TELEMETRY` | 覆盖安装遥测 |
-| `PI_CODEMODE_MAX_WORKERS` | codemode worker 上限（默认 2） |
-| `PI_CACHE_RETENTION` | `long` 启用长缓存 |
-| `PI_SHARE_VIEWER_URL` / `PI_RADIUS_GATEWAY` | share/bug 上传地址 |
-| `PI_HARDWARE_CURSOR` / `PI_CLIPBOARD_OSC52` / `PI_HYPERLINKS` / `PI_PROGRAM_STATUS` / `PI_IMAGE_PROTOCOL` / `PI_TRUE_COLOR` / `PI_TUI_ESC_TIMEOUT` | 终端能力覆盖 |
-| `VISUAL` / `EDITOR` | external editor 回退 |
-| `HTTP_PROXY` / `HTTPS_PROXY` | 代理 |
+| `PI_CODING_AGENT_DIR` | Overrides the agent directory |
+| `PI_CODING_AGENT_SESSION_DIR` | Overrides the session directory (`--session-dir` takes precedence) |
+| `PI_PACKAGE_DIR` | Overrides the package directory (Nix/Guix) |
+| `PI_OFFLINE` | `1`/`true`/`yes` disables networking (and sets `PI_SKIP_VERSION_CHECK=1`, `src/main.ts:579-583`) |
+| `PI_SKIP_VERSION_CHECK` | Disables the pi.dev version check |
+| `PI_TELEMETRY` | Overrides install telemetry |
+| `PI_CODEMODE_MAX_WORKERS` | codemode worker limit (default 2) |
+| `PI_CACHE_RETENTION` | `long` enables long cache retention |
+| `PI_SHARE_VIEWER_URL` / `PI_RADIUS_GATEWAY` | share/bug upload addresses |
+| `PI_HARDWARE_CURSOR` / `PI_CLIPBOARD_OSC52` / `PI_HYPERLINKS` / `PI_PROGRAM_STATUS` / `PI_IMAGE_PROTOCOL` / `PI_TRUE_COLOR` / `PI_TUI_ESC_TIMEOUT` | Terminal capability overrides |
+| `VISUAL` / `EDITOR` | External editor fallback |
+| `HTTP_PROXY` / `HTTPS_PROXY` | Proxy |
 
-进程标记（`src/cli/setup.ts:7-9`，`src/rpc-entry.ts:7-9`）：`PI_CODING_AGENT=true`、`AI_AGENT=pi`。
+Process markers (`src/cli/setup.ts:7-9`, `src/rpc-entry.ts:7-9`): `PI_CODING_AGENT=true`, `AI_AGENT=pi`.
 
-工具子进程环境（仅 LLM 调用的 `bash`/`powershell`，不是用户 `!` 命令，`docs/environment-variables.md:20-49`，`src/core/tools/bash.ts:193-209`）：
+Tool subprocess environment (only for LLM-invoked `bash`/`powershell`, not the user's `!` command; `docs/environment-variables.md:20-49`, `src/core/tools/bash.ts:193-209`):
 
-| 变量 | 值 |
+| Variable | Value |
 |---|---|
-| `PI_SESSION_ID` | 当前会话 id |
-| `PI_SESSION_FILE` | 会话绝对路径（内存会话不设） |
-| `PI_PROVIDER` | 当前模型 provider |
-| `PI_MODEL` | 当前模型 id |
+| `PI_SESSION_ID` | Current session id |
+| `PI_SESSION_FILE` | Absolute session path (unset for in-memory sessions) |
+| `PI_PROVIDER` | Current model provider |
+| `PI_MODEL` | Current model id |
 | `PI_REASONING_LEVEL` | `off`/`minimal`/`low`/`medium`/`high`/`xhigh`/`max` |
 
-注意：暴露前会先删除继承来的这 5 个变量，避免嵌套 pi 泄漏父会话信息（`bash.ts:194-198`）。
+Note: these 5 inherited variables are deleted before exposure, to prevent a nested pi from leaking the parent session's information (`bash.ts:194-198`).
 
 ---
 
-## 2. 会话 JSONL（R+W，最高优先级）
+## 2. Session JSONL (R+W, highest priority)
 
-### 2.1 文件位置与命名
+### 2.1 File location and naming
 
 ```
-<agent-dir>/sessions/--<encoded-cwd>--/<ISO-8601 时间戳，[:.] 替换为 ->_<session-id>.jsonl
+<agent-dir>/sessions/--<encoded-cwd>--/<ISO-8601 timestamp, with ":" and "." replaced by "-">_<session-id>.jsonl
 ```
 
-- 编码：`--` + (`cwd` 去掉开头 `/` 或 `\`，把 `/`、`\`、`:` 全部换成 `-`) + `--`（`src/core/session-manager.ts:589-593`）。
-  例：`/home/user/workspace` → `--home-user-workspace--`。
-- 文件名时间戳：`new Date().toISOString().replace(/[:.]/g,"-")`，例 `2026-10-22T01-40-58-902Z`（`session-manager.ts:1683-1685`）。
-- 会话 id：`uuidv7()`（`session-manager.ts:264-266`）。自定义 id 必须匹配 `^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$`（`session-manager.ts:268-274`）。
-- `--session-dir` / `PI_CODING_AGENT_SESSION_DIR` / `sessionDir` 可覆盖根目录；优先级 `--session-dir` > env > setting（`src/main.ts:691-696`）。
+- Encoding: `--` + (`cwd` with a leading `/` or `\` removed, and all `/`, `\`, `:` replaced by `-`) + `--` (`src/core/session-manager.ts:589-593`).
+  Example: `/home/user/workspace` → `--home-user-workspace--`.
+- Filename timestamp: `new Date().toISOString().replace(/[:.]/g,"-")`, e.g. `2026-10-22T01-40-58-902Z` (`session-manager.ts:1683-1685`).
+- Session id: `uuidv7()` (`session-manager.ts:264-266`). A custom id must match `^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$` (`session-manager.ts:268-274`).
+- `--session-dir` / `PI_CODING_AGENT_SESSION_DIR` / `sessionDir` can override the root; precedence `--session-dir` > env > setting (`src/main.ts:691-696`).
 
-真实样本（本机）：
+Real sample (local):
 
 ```
 ~/.pi/agent/sessions/--home-user-workspace--/2026-10-22T01-40-58-902Z_01a16144-c396-7069-b1e0-072e1af0764b.jsonl
 ```
 
-### 2.2 文件结构
+### 2.2 File structure
 
-严格 JSONL：一行一个 JSON 对象，`\n` 结尾。第一行必须是 header。条目**只追加不改写**（`createBranchedSession`/`_rewriteFile` 除外，见 2.7）。
+Strict JSONL: one JSON object per line, ending with `\n`. The first line must be the header. Entries are **append-only and never rewritten** (except `createBranchedSession`/`_rewriteFile`, see 2.7).
 
 ```
 line 1: SessionHeader
-line 2..n: SessionEntry（append 顺序，即写盘顺序，不保证与树路径顺序一致）
+line 2..n: SessionEntry (append order, i.e. write order, not guaranteed to match tree-path order)
 ```
 
-**延迟建文件规则**（`session-manager.ts:1160-1202`）：内存里可以先有 header/model_change/thinking_level_change/system message 等，但只要还没出现 `role` 为 `user` 或 `assistant` 的 message 条目，就不创建文件；首次出现时才把内存中全部条目一次性写盘（`openSync(path,"wx")` + 逐行写），之后每条 append。**Kotlin 版必须复刻**，否则"打开 pi 不聊天也留下空会话文件"会让 `--continue`/`/resume` 行为变化。
+**Deferred file creation rules** (`session-manager.ts:1160-1202`): header/model_change/thinking_level_change/system message entries may exist in memory, but as long as no message entry with `role` `user` or `assistant` has appeared, no file is created; on first appearance all in-memory entries are written at once (`openSync(path,"wx")` + line-by-line writes), after which each entry is appended. **The Kotlin version must replicate this**, otherwise "opening pi without chatting leaves an empty session file" changes `--continue`/`/resume` behavior.
 
 ### 2.3 SessionHeader
 
@@ -112,28 +112,28 @@ line 2..n: SessionEntry（append 顺序，即写盘顺序，不保证与树路�
 {"type":"session","version":3,"id":"01a16144-c396-7069-b1e0-072e1af0764b","timestamp":"2026-10-22T01:40:58.902Z","cwd":"/home/user/workspace"}
 ```
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Notes |
 |---|---|---|
-| `type` | `"session"` | 固定 |
-| `version` | number? | v1 无此字段；当前写 3（`session-manager.ts:41-50`） |
-| `id` | string | uuidv7 或自定义 |
-| `timestamp` | string | ISO 8601（`new Date().toISOString()`） |
-| `cwd` | string | 会话工作目录（决定资源发现与分组） |
-| `parentSession` | string? | fork/clone 时指向源会话文件路径（`session-manager.ts:1688-1695`） |
+| `type` | `"session"` | Fixed |
+| `version` | number? | v1 has no such field; currently writes 3 (`session-manager.ts:41-50`) |
+| `id` | string | uuidv7 or custom |
+| `timestamp` | string | ISO 8601 (`new Date().toISOString()`) |
+| `cwd` | string | Session working directory (determines resource discovery and grouping) |
+| `parentSession` | string? | Points to the source session file path on fork/clone (`session-manager.ts:1688-1695`) |
 
-### 2.4 条目基类
+### 2.4 Entry base
 
 ```json
-{"type":"<kind>","id":"<8 hex 或完整 uuid>","parentId":"<id 或 null>","timestamp":"<ISO8601>", ...}
+{"type":"<kind>","id":"<8 hex or full uuid>","parentId":"<id or null>","timestamp":"<ISO8601>", ...}
 ```
 
-- `id`：`randomUUID().slice(0,8)`，100 次冲突重试，仍冲突则用完整 UUID（`session-manager.ts:276-284`）。
-- `parentId`：根条目为 `null`；`resetLeaf()`/`branchWithSummary(null,...)` 可产生多个根（`docs/session-format.md:209-222`）。
-- `timestamp`：会话条目用 ISO 字符串；**消息体内的 `timestamp` 是 Unix 毫秒**（`docs/session-format.md:47`）。
+- `id`: `randomUUID().slice(0,8)`, with 100 conflict retries and a full UUID as the ultimate fallback (`session-manager.ts:276-284`).
+- `parentId`: root entries are `null`; `resetLeaf()`/`branchWithSummary(null,...)` can produce multiple roots (`docs/session-format.md:209-222`).
+- `timestamp`: session entries use ISO strings; **the `timestamp` inside message bodies is Unix milliseconds** (`docs/session-format.md:47`).
 
-### 2.5 条目类型全集（11 种）
+### 2.5 All entry types (11)
 
-`SessionEntry` 联合定义在 `session-manager.ts:183-194`。
+`SessionEntry` is defined as a union at `session-manager.ts:183-194`.
 
 #### (1) `message`
 
@@ -141,73 +141,73 @@ line 2..n: SessionEntry（append 顺序，即写盘顺序，不保证与树路�
 {"type":"message","id":"a1b2c3d4","parentId":"prev1234","timestamp":"2026-10-22T01:40:59.547Z","message":{ ... AgentMessage ... }}
 ```
 
-`message` 的 `role` 可以是：
+The `role` of `message` can be:
 
-通用（pi-ai）：`system`、`user`、`assistant`、`toolResult`。
-coding-agent 扩展（`src/core/messages.ts:29-77`）：`bashExecution`、`custom`、`branchSummary`、`compactionSummary`。
+Common (pi-ai): `system`, `user`, `assistant`, `toolResult`.
+coding-agent extensions (`src/core/messages.ts:29-77`): `bashExecution`, `custom`, `branchSummary`, `compactionSummary`.
 
-**SystemMessage**（`core/messages.ts` 用 pi-ai 类型；真实样本第 4 行）：
+**SystemMessage** (`core/messages.ts` uses pi-ai types; real sample line 4):
 
 ```json
 {"role":"system","content":"","sections":{"preamble":"You are an expert coding assistant operating inside pi, ...","tools":"<tools>\n- bash: ...\n</tools>","rules":"<rules>...","docs":"<docs>...","project_context":"<project_context>...","skills":"<skills>...","cwd":"<cwd>/home/user/workspace</cwd>","pi_background_shell_policy":"<pi_background_shell_policy>...</pi_background_shell_policy>"},"toolsAdded":[{"name":"bash","description":"...","parameters":{}}],"timestamp":1792633264614}
 ```
 
-本机真实会话的 section 键顺序为：`preamble, tools, rules, docs, project_context, skills, cwd, pi_background_shell_policy`（最后一个是扩展通过自定义 section 注入的，说明 sections 是开放的 `Record<string,string|null>`）。同一会话 `toolsAdded` 有 37 个工具。
+The section key order in real local sessions is: `preamble, tools, rules, docs, project_context, skills, cwd, pi_background_shell_policy` (the last is injected by an extension via a custom section, showing that sections are an open `Record<string,string|null>`). The same session's `toolsAdded` has 37 tools.
 
-| 字段 | 说明 |
+| Field | Notes |
 |---|---|
-| `content` | 结构化 prompt 时为空字符串；`before_agent_start` 强制整段 prompt 时为完整文本 |
-| `sections` | `Record<string, string \| null>`；`null` 表示删除该 section（`src/core/system-prompt.ts:217-228`） |
-| `toolsAdded` | `Tool[]`（name/description/parameters）——首次声明或新增工具 |
-| `toolsRemoved` | `{name}[]`——移除工具 |
-| `timestamp` | 毫秒 |
+| `content` | Empty string for structured prompts; full text when `before_agent_start` forces a whole prompt |
+| `sections` | `Record<string, string \| null>`; `null` deletes that section (`src/core/system-prompt.ts:217-228`) |
+| `toolsAdded` | `Tool[]` (name/description/parameters) — initial declarations or newly added tools |
+| `toolsRemoved` | `{name}[]` — removed tools |
+| `timestamp` | Milliseconds |
 
-**UserMessage**：
+**UserMessage**:
 
 ```json
-{"role":"user","content":[{"type":"text","text":"合并一下两个作业的pdf"}],"timestamp":1792633264614}
+{"role":"user","content":[{"type":"text","text":"Merge the two homework PDFs"}],"timestamp":1792633264614}
 ```
 
-`content` 可以是 string 或 `(TextContent|ImageContent)[]`。
+`content` can be a string or `(TextContent|ImageContent)[]`.
 
-**AssistantMessage**（真实样本第 5、8、10 行）：
+**AssistantMessage** (real samples, lines 5, 8, 10):
 
 ```json
 {"role":"assistant","content":[{"type":"thinking","thinking":"...","thinkingSignature":"reasoning_content"},{"type":"toolCall","id":"call_00_...","name":"bash","arguments":{"command":"..."}}],"api":"anthropic-messages","provider":"anthropic","model":"claude-sonnet-4-5","usage":{...},"stopReason":"toolUse","timestamp":1792633265000}
 ```
 
-可选字段：`responseModel`、`responseId`、`providerThinkingLevel`、`thinkingLevel`、`diagnostics`、`rawStopReason`、`errorMessage`、`endTurn`、`deferred`（`docs/message-types.md:119-160`）。`stopReason` ∈ `pending|stop|length|toolUse|error|aborted|deferred`；`pending` 不落盘（`docs/message-types.md:145`）。
+Optional fields: `responseModel`, `responseId`, `providerThinkingLevel`, `thinkingLevel`, `diagnostics`, `rawStopReason`, `errorMessage`, `endTurn`, `deferred` (`docs/message-types.md:119-160`). `stopReason` ∈ `pending|stop|length|toolUse|error|aborted|deferred`; `pending` is not persisted (`docs/message-types.md:145`).
 
-**ToolResultMessage**：
+**ToolResultMessage**:
 
 ```json
 {"role":"toolResult","toolCallId":"call_00_e3v0...","toolName":"bash","content":[{"type":"text","text":"total 8864\n..."}],"isError":false,"timestamp":1792633267694}
 ```
 
-可选：`details`（工具自定义，渲染/压缩文件统计用）、`usage`（嵌套模型调用）、`nestedCalls`（有界元数据）。`nestedCalls` 结构见 `docs/message-types.md:177-194`。
+Optional: `details` (tool-defined; used for rendering/compaction file stats), `usage` (nested model calls), `nestedCalls` (bounded metadata). The `nestedCalls` structure is in `docs/message-types.md:177-194`.
 
-**BashExecutionMessage**（`!` 命令与 RPC bash，`core/messages.ts:29-40`）：
+**BashExecutionMessage** (`!` command and RPC bash, `core/messages.ts:29-40`):
 
 ```json
 {"role":"bashExecution","command":"git status","output":"...","exitCode":0,"cancelled":false,"truncated":false,"fullOutputPath":"/tmp/pi-bash-xxx.log","excludeFromContext":false,"timestamp":1792633267000}
 ```
 
-`exitCode` 可为 `undefined`（被杀/取消）。`excludeFromContext:true` = `!!` 前缀，不发模型。
+`exitCode` may be `undefined` (killed/cancelled). `excludeFromContext:true` = the `!!` prefix, not sent to the model.
 
-**CustomMessage**（扩展注入，参与上下文，`core/messages.ts:46-53`）：
+**CustomMessage** (injected by extensions, participates in context, `core/messages.ts:46-53`):
 
 ```json
-{"role":"custom","customType":"my-ext","content":"注入文本","display":true,"details":{},"timestamp":1792633267000}
+{"role":"custom","customType":"my-ext","content":"injected text","display":true,"details":{},"timestamp":1792633267000}
 ```
 
-**BranchSummaryMessage / CompactionSummaryMessage**（不是直接落盘的条目类型，而是由 `branch_summary`/`compaction` 条目在构建上下文时生成，`core/messages.ts:100-120`）：
+**BranchSummaryMessage / CompactionSummaryMessage** (not entry types persisted directly, but generated from `branch_summary`/`compaction` entries when building context, `core/messages.ts:100-120`):
 
 ```json
 {"role":"branchSummary","summary":"...","fromId":"abc123","timestamp":1792633267000}
 {"role":"compactionSummary","summary":"...","tokensBefore":50000,"timestamp":1792633267000}
 ```
 
-**内容块**（`docs/message-types.md:13-66`）：
+**Content blocks** (`docs/message-types.md:13-66`):
 
 ```json
 {"type":"text","text":"...","textSignature":"<opaque>"}
@@ -216,13 +216,13 @@ coding-agent 扩展（`src/core/messages.ts:29-77`）：`bashExecution`、`custo
 {"type":"toolCall","id":"call_x","name":"bash","arguments":{...},"thoughtSignature":"<opaque>","namespace":"<openai responses namespace>"}
 ```
 
-**Usage**（`docs/message-types.md:71-90`）：
+**Usage** (`docs/message-types.md:71-90`):
 
 ```json
 {"input":100,"output":20,"cacheRead":0,"cacheWrite":0,"cacheWrite1h":0,"reasoning":0,"totalTokens":120,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0}}
 ```
 
-`reasoning` 已包含在 `output` 内，勿重复相加；`cacheWrite1h` 是 `cacheWrite` 中 1 小时保留的子集。
+`reasoning` is already included in `output`; do not add it again. `cacheWrite1h` is the subset of `cacheWrite` written with 1-hour retention.
 
 #### (2) `thinking_level_change`
 
@@ -239,10 +239,10 @@ coding-agent 扩展（`src/core/messages.ts:29-77`）：`bashExecution`、`custo
 #### (4) `usage`
 
 ```json
-{"type":"usage","id":"f6g7h8i9","parentId":"...","timestamp":"...","kind":"cache_warm","provider":"anthropic","model":"claude-sonnet-4-5","usage":{...},"note":"可选"}
+{"type":"usage","id":"f6g7h8i9","parentId":"...","timestamp":"...","kind":"cache_warm","provider":"anthropic","model":"claude-sonnet-4-5","usage":{...},"note":"optional"}
 ```
 
-不参与 LLM 上下文，但计入会话 token/成本；未知 `kind` 按普通 usage 处理（`docs/session-format.md:113-121`）。
+Does not participate in LLM context but counts toward session tokens/cost; an unknown `kind` is treated as ordinary usage (`docs/session-format.md:113-121`).
 
 #### (5) `compaction`
 
@@ -250,9 +250,9 @@ coding-agent 扩展（`src/core/messages.ts:29-77`）：`bashExecution`、`custo
 {"type":"compaction","id":"f6g7h8i9","parentId":"e5f6g7h8","timestamp":"...","summary":"...","firstKeptEntryId":"c3d4e5f6","tokensBefore":50000,"usage":{...},"details":{"readFiles":[],"modifiedFiles":[]},"fromHook":false,"systemMessage":{"role":"system","content":"","sections":{...},"toolsAdded":[...],"timestamp":1792635000000}}
 ```
 
-- `firstKeptEntryId` 必填。retain-none 时等于自身 id（`docs/compaction.md:131`）。
-- `systemMessage` 是压缩边界的完整 prompt/工具快照；旧会话可能没有。
-- `details`：默认实现为 `{readFiles:string[], modifiedFiles:string[]}`；扩展可自定义。
+- `firstKeptEntryId` is required. With retain-none it equals its own id (`docs/compaction.md:131`).
+- `systemMessage` is the complete prompt/tool snapshot at the compaction boundary; older sessions may not have it.
+- `details`: the default implementation is `{readFiles:string[], modifiedFiles:string[]}`; extensions may customize it.
 
 #### (6) `branch_summary`
 
@@ -260,7 +260,7 @@ coding-agent 扩展（`src/core/messages.ts:29-77`）：`bashExecution`、`custo
 {"type":"branch_summary","id":"g7h8i9j0","parentId":"a1b2c3d4","timestamp":"...","fromId":"f6g7h8i9","summary":"...","details":{"readFiles":[],"modifiedFiles":[]},"usage":{...},"fromHook":false}
 ```
 
-`parentId` 是新分支继续的条目，`fromId` 是被放弃的叶子（`docs/session-format.md:149-162`）。
+`parentId` is the entry the new branch continues from; `fromId` is the abandoned leaf (`docs/session-format.md:149-162`).
 
 #### (7) `custom`
 
@@ -268,15 +268,15 @@ coding-agent 扩展（`src/core/messages.ts:29-77`）：`bashExecution`、`custo
 {"type":"custom","id":"h8i9j0k1","parentId":"...","timestamp":"...","customType":"my-extension","data":{"count":42}}
 ```
 
-不参与上下文。虚拟模型状态用 `customType:"pi.virtual-model-state"`、`data:{provider,modelId,state}`（`src/core/virtual-models.ts:29-37`）。
+Does not participate in context. Virtual model state uses `customType:"pi.virtual-model-state"`, `data:{provider,modelId,state}` (`src/core/virtual-models.ts:29-37`).
 
 #### (8) `custom_message`
 
 ```json
-{"type":"custom_message","id":"i9j0k1l2","parentId":"...","timestamp":"...","customType":"my-ext","content":"注入上下文","display":true,"details":{}}
+{"type":"custom_message","id":"i9j0k1l2","parentId":"...","timestamp":"...","customType":"my-ext","content":"injected context","display":true,"details":{}}
 ```
 
-参与上下文（转成 user 消息）。`display` 控制 TUI 是否展示。
+Participates in context (converted to a user message). `display` controls whether the TUI shows it.
 
 #### (9) `context_edit`
 
@@ -284,12 +284,12 @@ coding-agent 扩展（`src/core/messages.ts:29-77`）：`bashExecution`、`custo
 {"type":"context_edit","id":"g6h7i8j9","parentId":"...","timestamp":"...","targetId":"c3d4e5f6","replacement":null}
 ```
 
-**注意**：非 null 的形式是 `{"content": <UserMessage.content | AssistantMessage.content | ToolResultMessage.content | CustomMessage.content>}`，不是直接写 content（`session-manager.ts:174-180`）。语义：
+**Note**: the non-null form is `{"content": <UserMessage.content | AssistantMessage.content | ToolResultMessage.content | CustomMessage.content>}`, not content written directly (`session-manager.ts:174-180`). Semantics:
 
-- `replacement:null` → 目标条目从模型上下文中省略。
-- 非 null → 只替换内容，保留原角色与元数据。
-- assistant/toolResult 的字符串替换会被归一化成一个 text 块（`session-manager.ts:519-541`）。
-- 同一 target 多条编辑，取当前分支上最后一条；分支相对（`docs/session-format.md:147`）。
+- `replacement:null` → the target entry is omitted from the model context.
+- Non-null → only the content is replaced; the original role and metadata are kept.
+- A string replacement for assistant/toolResult is normalized into a single text block (`session-manager.ts:519-541`).
+- With multiple edits to the same target, the last one on the current branch is used; edits are branch-relative (`docs/session-format.md:147`).
 
 #### (10) `label`
 
@@ -297,7 +297,7 @@ coding-agent 扩展（`src/core/messages.ts:29-77`）：`bashExecution`、`custo
 {"type":"label","id":"j0k1l2m3","parentId":"...","timestamp":"...","targetId":"a1b2c3d4","label":"checkpoint-1"}
 ```
 
-`label: undefined` 表示清除（写文件时该键省略或值为 null，解析端两种都要容忍）。
+`label: undefined` means clear (when writing, the key is omitted or null; parsers must tolerate both).
 
 #### (11) `session_info`
 
@@ -305,152 +305,152 @@ coding-agent 扩展（`src/core/messages.ts:29-77`）：`bashExecution`、`custo
 {"type":"session_info","id":"k1l2m3n4","parentId":"...","timestamp":"...","name":"Refactor auth module"}
 ```
 
-`name` 缺省表示清除。`--name` / `/name` 写此条目（`src/main.ts:710-717`，`session-manager.ts:1304-1316`）。
+A missing `name` means clear. `--name` / `/name` write this entry (`src/main.ts:710-717`, `session-manager.ts:1304-1316`).
 
-### 2.6 版本迁移（R）
+### 2.6 Version migration (R)
 
-`migrateToCurrentVersion`（`session-manager.ts:337-352`）：
+`migrateToCurrentVersion` (`session-manager.ts:337-352`):
 
-- v1（无 version）→ v2：按行顺序补 `id`（8 hex）与 `parentId`（前一条），compaction 的 `firstKeptEntryIndex` 转成 `firstKeptEntryId`。
-- v2 → v3：`message.role === "hookMessage"` 改名为 `"custom"`。
+- v1 (no version) → v2: add `id` (8 hex) and `parentId` (the previous entry) in line order, and convert compaction's `firstKeptEntryIndex` to `firstKeptEntryId`.
+- v2 → v3: rename `message.role === "hookMessage"` to `"custom"`.
 
-Kotlin 读入时必须能处理 v1/v2/v3；写出时统一 v3。**不要**把迁移结果立刻回写（真 pi 也是只在内存迁移，写回时按需；`loadEntriesFromFile` 会在文件末尾追加前确保有换行，`session-manager.ts:662-676`）。
+Kotlin must handle v1/v2/v3 on read and always write v3. **Do not** write migration results back immediately (real pi migrates only in memory and writes back as needed; `loadEntriesFromFile` ensures a newline before appending at the end of the file, `session-manager.ts:662-676`).
 
-### 2.7 树与分支操作（W）
+### 2.7 Tree and branch operations (W)
 
-- `branch(branchFromId)`：把 leaf 移到某条目（`session-manager.ts:1579-1590`）。
-- `resetLeaf()`：leaf 置 null，下一个条目成为新根（1591-1599）。
-- `branchWithSummary(branchFromId, summary, details?, fromHook?)`：追加 `branch_summary` 条目（1600-1631）。
-- `createBranchedSession(leafId)`（fork/clone 实现，1632-1754）：
-  1. 取 leaf→root 路径；
-  2. 去掉 `label` 条目并重新串接 `parentId`（label 上的子树要接回）；
-  3. compaction 的 `firstKeptEntryId` 若指向被去掉的 label，替换为其后继；
-  4. 新 header（新 id、新时间戳、`parentSession`=旧文件路径）；
-  5. 把路径上目标的 label 以新 `label` 条目追加到末尾；
-  6. 若分支里已有 user/assistant 消息则立即重写文件，否则延迟到首次消息。
+- `branch(branchFromId)`: move the leaf to an entry (`session-manager.ts:1579-1590`).
+- `resetLeaf()`: set the leaf to null; the next entry becomes a new root (1591-1599).
+- `branchWithSummary(branchFromId, summary, details?, fromHook?)`: append a `branch_summary` entry (1600-1631).
+- `createBranchedSession(leafId)` (the fork/clone implementation, 1632-1754):
+  1. Take the leaf→root path;
+  2. drop `label` entries and re-chain `parentId` (subtrees on a label must be reattached);
+  3. if a compaction's `firstKeptEntryId` points to a removed label, replace it with its successor;
+  4. new header (new id, new timestamp, `parentSession`=old file path);
+  5. append the labels of targets on the path as new `label` entries at the end;
+  6. if the branch already has user/assistant messages, rewrite the file immediately; otherwise defer to the first message.
 
-### 2.8 上下文重建（R，必须逐字对齐）
+### 2.8 Context rebuild (R, must be aligned verbatim)
 
-三步（`session-manager.ts:439-586`）：
+Three steps (`session-manager.ts:439-586`):
 
-**第 1 步 `buildContextEntries(entries, leafId)`**
-1. 从 leaf 沿 `parentId` 回溯到根得到路径（`buildSessionPath`，390-417）。
-2. 找路径上**最新**的 compaction 条目。
-3. 无 compaction → 返回整条路径。
-4. 有 compaction → `[compaction] + 旧路径中从 firstKeptEntryId（含）到 compaction 之前的条目（跳过 system message） + compaction 之后的全部条目`。
+**Step 1: `buildContextEntries(entries, leafId)`**
+1. Walk from the leaf up `parentId` to the root to get the path (`buildSessionPath`, 390-417).
+2. Find the **newest** compaction entry on the path.
+3. No compaction → return the whole path.
+4. Compaction exists → `[compaction] + entries on the old path from firstKeptEntryId (inclusive) up to the compaction (skipping system messages) + all entries after the compaction`.
 
-**第 2 步 `buildSessionProjection`**
-1. 从**完整路径**（不是裁剪后的）取最后的 `model_change`/`thinking_level_change` 作为当前 model/thinking（`getSessionContextSettings`，418-437）。
-2. 对裁剪后的条目集合，收集 `context_edit`（按 targetId 取后出现者）。
-3. 每条目转消息（`sessionEntryToContextMessages`，439-474）：
-   - `message` → 原消息（`content` 为 null 时补 `""`/`[]`，容忍损坏文件）；
-   - `custom_message` → CustomMessage；
-   - `branch_summary`（有 summary）→ BranchSummaryMessage；
-   - `compaction` → `[systemMessage?, compactionSummary]`；
-   - 其它 → 空。
-4. 应用 context_edit（`projectContextEntry`，519-541）。
-5. 注意：若裁剪后 index>0 处还有更老的 compaction 条目（因为它的原始 id 落在保留区间），它的消息贡献为空（只保留条目本身供 UI 渲染，`session-manager.ts:552-575`）。
+**Step 2: `buildSessionProjection`**
+1. Take the last `model_change`/`thinking_level_change` from the **full path** (not the trimmed one) as the current model/thinking (`getSessionContextSettings`, 418-437).
+2. For the trimmed entry set, collect `context_edit`s (the later one per targetId wins).
+3. Convert each entry to messages (`sessionEntryToContextMessages`, 439-474):
+   - `message` → the original message (when `content` is null, fill in `""`/`[]`; tolerate corrupt files);
+   - `custom_message` → CustomMessage;
+   - `branch_summary` (with a summary) → BranchSummaryMessage;
+   - `compaction` → `[systemMessage?, compactionSummary]`;
+   - others → empty.
+4. Apply context_edit (`projectContextEntry`, 519-541).
+5. Note: if an older compaction entry remains at index>0 after trimming (because its original id falls in the retained range), its message contribution is empty (the entry itself is kept only for UI rendering, `session-manager.ts:552-575`).
 
-**第 3 步 `buildSessionContext`**：`{messages, thinkingLevel, model}`。
+**Step 3: `buildSessionContext`**: `{messages, thinkingLevel, model}`.
 
-### 2.9 会话列表与信息（R）
+### 2.9 Session list and info (R)
 
-`SessionInfo`（`session-manager.ts:229-243`）：`path,id,cwd,name?,parentSessionPath?,created,modified,messageCount,firstMessage,allMessagesText`。
+`SessionInfo` (`session-manager.ts:229-243`): `path,id,cwd,name?,parentSessionPath?,created,modified,messageCount,firstMessage,allMessagesText`.
 
-- `list(cwd)`：只看 `<agent-dir>/sessions/--encoded-cwd--/*.jsonl`；`listAll()` 扫全部项目目录。
-- 排序：`modified` 降序（`sortSessionInfos`，920-922）。
-- 读 header 有界扫描：最多 1MB、4KB 缓冲（604-613）；损坏文件不阻断其它会话。
-- `findById(cwd,id)`：先读 header 精确匹配（1874+）。
-- `continueRecent`：取该 cwd 目录下 mtime 最新且 header.cwd 匹配的会话（`findMostRecentSession`，749-769）。
-- 删除：真 pi 用系统 `trash` 命令（`docs/session-format.md:16-20`），Kotlin 版可以只做文件删除但要在帮助里说明。
+- `list(cwd)`: only looks at `<agent-dir>/sessions/--encoded-cwd--/*.jsonl`; `listAll()` scans all project directories.
+- Sorting: `modified` descending (`sortSessionInfos`, 920-922).
+- Header reads use a bounded scan: at most 1MB, 4KB buffer (604-613); a corrupt file does not block other sessions.
+- `findById(cwd,id)`: reads the header first for an exact match (1874+).
+- `continueRecent`: takes the session with the newest mtime in that cwd directory whose header.cwd matches (`findMostRecentSession`, 749-769).
+- Deletion: real pi uses the system `trash` command (`docs/session-format.md:16-20`); the Kotlin version can do a plain file delete but must say so in the help.
 
-### 2.10 会话不变量（易错点）
+### 2.10 Session invariants (easy to get wrong)
 
-1. `timestamp` 两种：条目 ISO 字符串，消息体内毫秒数字。混用会导致 UI/排序错误。
-2. `parentId` 必须指向已存在的条目 id，否则 `getTree` 会把该条目当根（`docs/session-format.md:211-216`）。
-3. 同一次压缩重复写入会产生两个 compaction 条目；`buildContextEntries` 只认路径上最新的，但 `tokensBefore` 必须按压缩前投影重新计算（`docs/compaction.md:83`）。
-4. 系统消息可以出现在会话中间（工具集/prompt 变化），不可假设只有第一条。
-5. `usage`/`custom`/`label`/`session_info`/`context_edit` 不产生上下文消息，但 UI/统计需要它们。
+1. Two kinds of `timestamp`: entry timestamps are ISO strings, while timestamps inside message bodies are millisecond numbers. Mixing them causes UI/sorting errors.
+2. `parentId` must point to an existing entry id; otherwise `getTree` treats that entry as a root (`docs/session-format.md:211-216`).
+3. Repeated writes from the same compaction produce two compaction entries; `buildContextEntries` only considers the newest on the path, but `tokensBefore` must be recomputed from the pre-compaction projection (`docs/compaction.md:83`).
+4. System messages can appear in the middle of a session (tool set/prompt changes); do not assume only the first one.
+5. `usage`/`custom`/`label`/`session_info`/`context_edit` produce no context messages, but the UI/statistics need them.
 
 ---
 
-## 3. settings.json（R+W）
+## 3. settings.json (R+W)
 
-### 3.1 位置与优先级
+### 3.1 Location and precedence
 
-- 用户级：`<agent-dir>/settings.json`；项目级：`<cwd>/.pi/settings.json`（需项目信任，`sessionDir` 例外）。
-- 合并：标量/对象 **项目覆盖用户**（对象深合并）；资源数组 **合并**（`src/core/settings-manager.ts:143-158`）。
-- 写回：加文件锁后读-改-写，**只覆盖被修改的字段/嵌套键**，未修改字段与未知字段保留（`persistScopedSettings`，`settings-manager.ts:601-628`）。
-- 目录不存在则 `mode 0o700` 创建（`settings-manager.ts:186-200` 区域）。
-- 读取失败会记录 error 并在启动时输出 diagnostic，但不会崩（`settings-diagnostics.ts`）。
+- User level: `<agent-dir>/settings.json`; project level: `<cwd>/.pi/settings.json` (requires project trust; `sessionDir` is the exception).
+- Merge: scalars/objects are **project-overrides-user** (deep merge for objects); resource arrays **merge** (`src/core/settings-manager.ts:143-158`).
+- Write-back: take a file lock, then read-modify-write, **overwriting only the modified fields/nested keys**; unmodified and unknown fields are preserved (`persistScopedSettings`, `settings-manager.ts:601-628`).
+- If the directory does not exist, create it with `mode 0o700` (`settings-manager.ts:186-200` region).
+- A read failure logs an error and emits a startup diagnostic, but does not crash (`settings-diagnostics.ts`).
 
-### 3.2 顶层字段全集
+### 3.2 Complete top-level field set
 
-依据 `src/core/settings-schema.ts:206-470`（`export const SettingsSchema`，`additionalProperties:true`）与 `src/core/settings-defaults.ts:4-67`。默认值写成 `——` 表示无默认。
+Based on `src/core/settings-schema.ts:206-470` (`export const SettingsSchema`, `additionalProperties:true`) and `src/core/settings-defaults.ts:4-67`. A default of `—` means there is no default.
 
-| 字段 | 类型 | 默认 | 含义 |
+| Field | Type | Default | Meaning |
 |---|---|---|---|
-| `$schema` | string | — | 编辑器校验用，写 `https://pi.dev/schemas/settings.schema.json` |
-| `lastChangelogVersion` | string | — | 用户看过的 changelog 版本 |
-| `defaultProvider` | string | — | 启动 provider |
-| `defaultModel` | string | — | 启动模型 id |
-| `defaultThinkingLevel` | enum(off,minimal,low,medium,high,xhigh,max) | `medium`（代码默认，schema 未写默认） | 启动思考级别 |
-| `modelThinkingLevels` | `Record<"provider/modelId", level>` | — | 每模型启动思考级别 |
-| `transport` | `auto\|sse\|websocket\|websocket-cached` | `auto` | AI Provider 传输偏好 |
-| `sessionShareDestination` | `auto\|gist\|radius` | `auto` | `/share` 目标 |
-| `steeringMode` | `all\|one-at-a-time` | `one-at-a-time` | steering 投递策略 |
-| `followUpMode` | `all\|one-at-a-time` | `one-at-a-time` | follow-up 投递策略 |
-| `theme` | string | — | 主题名；`light/dark` 表示跟随 |
-| `compaction` | object | 见下 | |
-| `branchSummary` | object | 见下 | |
-| `retry` | object | 见下 | |
-| `hideThinkingBlock` | boolean | `false` | 隐藏 thinking |
-| `showCacheMissNotices` | boolean | `false` | 缓存命中提示 |
-| `externalEditor` | string | — | Ctrl+G 外部编辑器，优先于 `$VISUAL`/`$EDITOR` |
-| `shellPath` | string | — | 自定义 shell（支持 `~`） |
-| `quietStartup` | boolean\|`"header"` | `false` | `true` 全隐藏；`"header"` 只留头部 |
-| `defaultProjectTrust` | `ask\|always\|never` | `ask` | **仅全局可设** |
-| `shellCommandPrefix` | string | — | 每条 shell 命令前缀 |
-| `npmCommand` | string[] | `["npm"]`（未写默认） | npm 调用 argv |
-| `collapseChangelog` | boolean | `false` | 精简 changelog |
-| `enableInstallTelemetry` | boolean | `true` | 安装/更新遥测 |
-| `enableAnalytics` | boolean | `false` | 分析数据 |
-| `trackingId` | string | — | 分析 id |
-| `packages` | `PackageSource[]` | `[]` | 包声明 |
-| `extensions` | string[] | `[]` | 扩展路径 |
-| `deviceId` | string | — | 稳定安装 UUID（仅全局） |
-| `skills` | string[] | `[]` | 技能路径（旧对象格式会迁移） |
-| `prompts` | string[] | `[]` | prompt 模板路径 |
-| `themes` | string[] | `[]` | 主题路径 |
-| `enableSkillCommands` | boolean | `true` | 注册 `/skill:name` |
-| `terminal` | object | 见下 | |
-| `images` | object | 见下 | |
-| `enabledModels` | string[] | — | 模型循环 scope（同 `--models`） |
-| `defaultTools` | string[] | `["read","bash","edit","write"]`（`DEFAULT_TOOL_NAMES`，`settings-manager.ts:85`） | 初始工具选择，支持 `+name`/`-name` |
-| `doubleEscapeAction` | `tree\|fork\|none` | `tree` | 空编辑器双击 Esc |
-| `treeFilterMode` | `default\|no-tools\|user-only\|labeled-only\|all` | `default` | `/tree` 初始过滤 |
-| `thinkingBudgets` | object | — | 各 thinking level 的 token 预算 |
-| `editorPaddingX` | number(0-3) | `0` | 编辑器左右 padding |
-| `outputPad` | `0\|1` | `1` | 正文左右 padding |
-| `autocompleteMaxVisible` | number(3-20) | `5` | 补全可见条数 |
-| `showHardwareCursor` | boolean | `false` | 用终端硬件光标 |
-| `markdown` | object | 见下 | |
-| `warnings` | object | 见下 | |
-| `codemode` | object | 见下 | |
-| `sessionDir` | string | — | 会话目录 |
-| `httpProxy` | string | — | 代理（仅全局） |
-| `httpIdleTimeoutMs` | number\|"disabled" | `300000` | HTTP 空闲超时 |
-| `cacheWarming` | `off\|streaming\|idle` | `streaming` | 缓存保温（仅全局） |
-| `websocketConnectTimeoutMs` | number\|"disabled" | `15000` | WS 连接超时 |
-| `tuiMode` | `regular\|fullscreen` | `fullscreen` | TUI 模式 |
-| `fullscreenExitOutput` | `transcript\|resume-hint` | `transcript` | 全屏退出输出 |
-| `fullscreenScrollbar` | `auto\|always\|hidden` | `auto` | 全屏滚动条 |
-| `fullscreenCopyOnSelect` | boolean | `true` | 全屏选中即复制 |
-| `fullscreenWheelScrollLines` | number\|`auto` | `auto` | 滚轮行数（1-100 截断） |
-| `queueMode` | 旧字段 | — | 迁移到 `steeringMode` |
-| `websockets` | 旧字段 | — | 迁移到 `transport` |
+| `$schema` | string | — | For editor validation; set to `https://pi.dev/schemas/settings.schema.json` |
+| `lastChangelogVersion` | string | — | The changelog version the user has seen |
+| `defaultProvider` | string | — | Startup provider |
+| `defaultModel` | string | — | Startup model id |
+| `defaultThinkingLevel` | enum(off,minimal,low,medium,high,xhigh,max) | `medium` (code default; schema declares no default) | Startup thinking level |
+| `modelThinkingLevels` | `Record<"provider/modelId", level>` | — | Startup thinking level per model |
+| `transport` | `auto\|sse\|websocket\|websocket-cached` | `auto` | AI provider transport preference |
+| `sessionShareDestination` | `auto\|gist\|radius` | `auto` | `/share` target |
+| `steeringMode` | `all\|one-at-a-time` | `one-at-a-time` | Steering delivery policy |
+| `followUpMode` | `all\|one-at-a-time` | `one-at-a-time` | Follow-up delivery policy |
+| `theme` | string | — | Theme name; `light/dark` means follow |
+| `compaction` | object | see below | |
+| `branchSummary` | object | see below | |
+| `retry` | object | see below | |
+| `hideThinkingBlock` | boolean | `false` | Hide thinking |
+| `showCacheMissNotices` | boolean | `false` | Cache-hit notices |
+| `externalEditor` | string | — | Ctrl+G external editor, taking precedence over `$VISUAL`/`$EDITOR` |
+| `shellPath` | string | — | Custom shell (supports `~`) |
+| `quietStartup` | boolean\|`"header"` | `false` | `true` hides everything; `"header"` keeps only the header |
+| `defaultProjectTrust` | `ask\|always\|never` | `ask` | **Global-only** |
+| `shellCommandPrefix` | string | — | Prefix for every shell command |
+| `npmCommand` | string[] | `["npm"]` (no default written) | argv used to invoke npm |
+| `collapseChangelog` | boolean | `false` | Condensed changelog |
+| `enableInstallTelemetry` | boolean | `true` | Install/update telemetry |
+| `enableAnalytics` | boolean | `false` | Analytics data |
+| `trackingId` | string | — | Analytics id |
+| `packages` | `PackageSource[]` | `[]` | Package declarations |
+| `extensions` | string[] | `[]` | Extension paths |
+| `deviceId` | string | — | Stable installation UUID (global-only) |
+| `skills` | string[] | `[]` | Skill paths (old object format is migrated) |
+| `prompts` | string[] | `[]` | Prompt template paths |
+| `themes` | string[] | `[]` | Theme paths |
+| `enableSkillCommands` | boolean | `true` | Register `/skill:name` |
+| `terminal` | object | see below | |
+| `images` | object | see below | |
+| `enabledModels` | string[] | — | Model cycle scope (same as `--models`) |
+| `defaultTools` | string[] | `["read","bash","edit","write"]` (`DEFAULT_TOOL_NAMES`, `settings-manager.ts:85`) | Initial tool selection, supports `+name`/`-name` |
+| `doubleEscapeAction` | `tree\|fork\|none` | `tree` | Double Esc in an empty editor |
+| `treeFilterMode` | `default\|no-tools\|user-only\|labeled-only\|all` | `default` | Initial `/tree` filter |
+| `thinkingBudgets` | object | — | Token budget per thinking level |
+| `editorPaddingX` | number(0-3) | `0` | Editor left/right padding |
+| `outputPad` | `0\|1` | `1` | Body left/right padding |
+| `autocompleteMaxVisible` | number(3-20) | `5` | Visible suggestions |
+| `showHardwareCursor` | boolean | `false` | Use the terminal hardware cursor |
+| `markdown` | object | see below | |
+| `warnings` | object | see below | |
+| `codemode` | object | see below | |
+| `sessionDir` | string | — | Session directory |
+| `httpProxy` | string | — | Proxy (global-only) |
+| `httpIdleTimeoutMs` | number\|"disabled" | `300000` | HTTP idle timeout |
+| `cacheWarming` | `off\|streaming\|idle` | `streaming` | Cache warming (global-only) |
+| `websocketConnectTimeoutMs` | number\|"disabled" | `15000` | WS connection timeout |
+| `tuiMode` | `regular\|fullscreen` | `fullscreen` | TUI mode |
+| `fullscreenExitOutput` | `transcript\|resume-hint` | `transcript` | Fullscreen exit output |
+| `fullscreenScrollbar` | `auto\|always\|hidden` | `auto` | Fullscreen scrollbar |
+| `fullscreenCopyOnSelect` | boolean | `true` | Copy on select in fullscreen |
+| `fullscreenWheelScrollLines` | number\|`auto` | `auto` | Wheel scroll lines (clamped to 1-100) |
+| `queueMode` | legacy field | — | Migrated to `steeringMode` |
+| `websockets` | legacy field | — | Migrated to `transport` |
 
-嵌套对象：
+Nested objects:
 
 ```jsonc
 "compaction": { "enabled": true, "reserveTokens": 16384, "keepRecentTokens": 20000,
@@ -466,25 +466,25 @@ Kotlin 读入时必须能处理 v1/v2/v3；写出时统一 v3。**不要**把迁
 "codemode": { "mode": "on", "inlineBudget": 3000 }
 ```
 
-设置迁移（`migrateSettings`，`settings-manager.ts:397-457`，读写时会做，写回为迁移后形态）：
+Settings migration (`migrateSettings`, `settings-manager.ts:397-457`, applied on read and write; writes use the migrated form):
 
-- `queueMode` → `steeringMode`（仅当无 `steeringMode`）。
-- `websockets:true/false` → `transport:"websocket"/"sse"`（仅当无 `transport`）。
-- `skills` 旧对象 `{enableSkillCommands,customDirectories}` → `enableSkillCommands` + `skills:string[]`。
-- `retry.maxDelayMs` → `retry.provider.maxRetryDelayMs`。
+- `queueMode` → `steeringMode` (only when `steeringMode` is absent).
+- `websockets:true/false` → `transport:"websocket"/"sse"` (only when `transport` is absent).
+- Old object-form `skills` `{enableSkillCommands,customDirectories}` → `enableSkillCommands` + `skills:string[]`.
+- `retry.maxDelayMs` → `retry.provider.maxRetryDelayMs`.
 
-### 3.3 `defaultTools` 合并算法（易错，必须照做）
+### 3.3 `defaultTools` merge algorithm (easy to get wrong; must be followed)
 
-依据 `settings-manager.ts:85-142`，优先级：内置默认 → 用户 settings → 项目 settings → `--tools` / `--no-tools` / `--no-builtin-tools`。
+Based on `settings-manager.ts:85-142`, precedence: built-in defaults → user settings → project settings → `--tools` / `--no-tools` / `--no-builtin-tools`.
 
-- 列表全是普通名字 → **替换**继承的选择。
-- 列表只含 `+name`/`-name` → 在继承选择上增删；两种不能混（混用报错 `tool names cannot be mixed with +name or -name entries`）。
-- `+name`/`-name` 只接受精确工具名，不接受 `*`（`settings-manager.ts:97-108`）。
-- 空数组 = 关闭全部内置工具（但不清扩展/SDK 工具）。
+- A list of plain names only → **replaces** the inherited selection.
+- A list containing only `+name`/`-name` → adds/removes on top of the inherited selection; the two forms cannot be mixed (mixing errors with `tool names cannot be mixed with +name or -name entries`).
+- `+name`/`-name` accept only exact tool names, not `*` (`settings-manager.ts:97-108`).
+- An empty array = disable all built-in tools (but does not clear extension/SDK tools).
 
-### 3.4 `packages` 条目
+### 3.4 `packages` entries
 
-`PackageSourceSchema`（`settings-schema.ts:171-190`）：
+`PackageSourceSchema` (`settings-schema.ts:171-190`):
 
 ```jsonc
 "packages": [
@@ -495,11 +495,11 @@ Kotlin 读入时必须能处理 v1/v2/v3；写出时统一 v3。**不要**把迁
 ]
 ```
 
-- `source` 前缀：`npm:`、`git:`、`github:`、`http(s)://`（当 git 处理）、`ssh:`、`builtin:`；裸路径/相对路径/`file:` 为本地。
-- 过滤语法（对象形式的 `extensions`/`skills`/`prompts`/`themes`）：`[]` 表示该类型全不加载；省略表示全加载；`!pattern` 排除 glob；`+path` 精确包含；`-path` 精确排除（`docs/packages.md:111-119`）。
-- `autoload:false`：从空开始，仅显式 pattern 生效（项目条目可当"用户包过滤增量"）。
+- `source` prefixes: `npm:`, `git:`, `github:`, `http(s)://` (treated as git), `ssh:`, `builtin:`; bare paths/relative paths/`file:` are local.
+- Filter syntax (object-form `extensions`/`skills`/`prompts`/`themes`): `[]` means load none of that type; omission means load all; `!pattern` excludes a glob; `+path` includes exactly; `-path` excludes exactly (`docs/packages.md:111-119`).
+- `autoload:false`: start from empty, only explicit patterns apply (project entries can act as "user package filter increments").
 
-### 3.5 真实样本（本机，必须能读）
+### 3.5 Real sample (local; must be readable)
 
 ```json
 {
@@ -508,7 +508,7 @@ Kotlin 读入时必须能处理 v1/v2/v3；写出时统一 v3。**不要**把迁
   "defaultThinkingLevel": "max",
   "hideThinkingBlock": true,
   "lastChangelogVersion": "1.0.0",
-  "packages": ["npm:pi-web-access@0.42.0", "npm:@juicesharp/rpiv-ask-user-question", "...13 条..."],
+  "packages": ["npm:pi-web-access@0.42.0", "npm:@juicesharp/rpiv-ask-user-question", "...13 entries..."],
   "theme": "dark",
   "compaction": { "enabled": true },
   "extensions": ["+builtin:mcp"],
@@ -516,15 +516,13 @@ Kotlin 读入时必须能处理 v1/v2/v3；写出时统一 v3。**不要**把迁
 }
 ```
 
----
-
-## 4. auth.json / models-store.json（R+W）
+## 4. auth.json / models-store.json (R+W)
 
 ### 4.1 auth.json
 
-路径 `<agent-dir>/auth.json`，`JSON.stringify(data, null, 2)`，权限 **0600**（仅创建时设置，已有权限不强改，`auth-storage.ts:36-37`），跨进程 `proper-lockfile` 加锁（同步 10 次重试、异步 30s 上限 + EPERM 重试，`auth-storage.ts:81-156`）。
+Path `<agent-dir>/auth.json`, `JSON.stringify(data, null, 2)`, permissions **0600** (set only at creation; existing permissions are not forcibly changed, `auth-storage.ts:36-37`), cross-process `proper-lockfile` locking (10 sync retries, async 30s cap + EPERM retry, `auth-storage.ts:81-156`).
 
-结构：`Record<providerId, Credential>`（`packages/ai/src/auth/types.ts:17-37`）：
+Structure: `Record<providerId, Credential>` (`packages/ai/src/auth/types.ts:17-37`):
 
 ```jsonc
 {
@@ -537,22 +535,22 @@ Kotlin 读入时必须能处理 v1/v2/v3；写出时统一 v3。**不要**把迁
 }
 ```
 
-- `api_key`：`key` 可省略（纯环境变量场景）；`env` 是 provider 级环境值（Cloudflare account/gateway 等）。
-- `oauth`：`access`/`refresh`/`expires`(毫秒)；其余键（`clientId`/`scopes`/`scope`/`tokenType`…）原样保留，`OAuthCredentials` 允许 `[key:string]:unknown`。
-- 凭据文件不存在时创建 `{}`（`auth-storage.ts:75-79`）。
-- 旧 `~/.pi/agent/oauth.json` 与 `settings.json.apiKeys` 会迁移进 auth.json，并把 oauth.json 改名为 `.migrated`（`src/migrations.ts:21-73`）。
+- `api_key`: `key` may be omitted (env-only scenarios); `env` holds provider-level environment values (Cloudflare account/gateway, etc.).
+- `oauth`: `access`/`refresh`/`expires` (milliseconds); other keys (`clientId`/`scopes`/`scope`/`tokenType`...) are preserved as-is, and `OAuthCredentials` allows `[key:string]:unknown`.
+- When the credential file does not exist, create `{}` (`auth-storage.ts:75-79`).
+- The old `~/.pi/agent/oauth.json` and `settings.json.apiKeys` are migrated into auth.json, and oauth.json is renamed to `.migrated` (`src/migrations.ts:21-73`).
 
-**凭据解析优先级**（`docs/models.md:23`）：运行时 `--api-key` > auth.json > `models.json` 的 `apiKey` > Provider 环境变量/云凭据。
+**Credential resolution precedence** (`docs/models.md:23`): runtime `--api-key` > auth.json > `models.json`'s `apiKey` > provider environment variables/cloud credentials.
 
 ### 4.2 models-store.json
 
-`FileModelsStore`：`Record<providerId, ModelsStoreEntry>`（pi-ai 类型），与 auth 共用同一套锁实现（`models-store.ts:44-60`）。运行时缓存动态模型目录；**读不到不影响启动**，可整体忽略并重新拉取。
+`FileModelsStore`: `Record<providerId, ModelsStoreEntry>` (pi-ai types), sharing the same lock implementation as auth (`models-store.ts:44-60`). It caches the dynamic model catalog at runtime; **failure to read it does not affect startup** and it can be ignored and re-fetched entirely.
 
 ---
 
-## 5. models.json（R）
+## 5. models.json (R)
 
-路径 `<agent-dir>/models.json`。字段全集见 `docs/models-configuration.md`（自动生成自源码）。最高频结构：
+Path `<agent-dir>/models.json`. The full field set is in `docs/models-configuration.md` (auto-generated from source). Most common structure:
 
 ```jsonc
 {
@@ -561,34 +559,34 @@ Kotlin 读入时必须能处理 v1/v2/v3；写出时统一 v3。**不要**把迁
     "self-host": {
       "baseUrl": "http://47.113.218.61:28080",
       "api": "openai-completions",
-      "apiKey": "sk-...",                       // 也支持 "$ENV" / "${ENV}" / "!command"
+      "apiKey": "sk-...",                       // also supports "$ENV" / "${ENV}" / "!command"
       "headers": { "X-Foo": "$FOO" },
-      "authHeader": false,                      // true = 以 Authorization: Bearer 发送 key
+      "authHeader": false,                      // true = send the key as Authorization: Bearer
       "models": [
         { "id": "Airis-AI", "name": "Airis-AI", "reasoning": true, "input": ["text"],
           "contextWindow": 262144, "maxTokens": 32768 }
       ]
     },
-    "anthropic-proxy": { "baseUrl": "https://proxy.example.com" }   // 只改 baseUrl，模型/认证沿用内置
+    "anthropic-proxy": { "baseUrl": "https://proxy.example.com" }   // only overrides baseUrl; models/auth come from the built-in provider
   }
 }
 ```
 
-关键字段（`docs/models-configuration.md:13-104`）：
+Key fields (`docs/models-configuration.md:13-104`):
 
-- provider：`name`、`baseUrl`、`apiKey`、`api`、`oauth:"radius"`、`headers`、`compat`、`authHeader`、`models[]`、`modelOverrides`。
-- model：`id`(必填)、`name`、`api`、`baseUrl`、`reasoning`、`thinkingLevelMap`、`input:("text"|"image")[]`（默认 `["text"]`）、`inputLimits`、`cost{input,output,cacheRead,cacheWrite,tiers[]}`、`promptCache{short,long}`、`contextWindow`（默认 128000）、`maxTokens`（默认 16384）、`samplingParams`、`samplingParamsByThinkingLevel`、`headers`、`compat`。
-- `modelOverrides`：按模型 id 覆盖内置/扩展模型；对象字段（如 `cost`）逐键合并，其它字段整体替换；未知 id 忽略。
-- 值解析：`apiKey`/`headers` 支持 `$NAME`、`${NAME}`、字面量、`!command`；`$$`/`$!` 转义为字面 `$`/`!`；命令在请求时执行且不缓存（`docs/models.md:65`，`src/core/resolve-config-value.ts`）。
-- `compat` 是"已验证差异"清单，按 API 分组（openai-completions / openai-responses / anthropic-messages / bedrock / mistral），字段见 `docs/models-configuration.md:105-187`。Kotlin 版若只支持两种 API，只需实现这两组字段。
+- provider: `name`, `baseUrl`, `apiKey`, `api`, `oauth:"radius"`, `headers`, `compat`, `authHeader`, `models[]`, `modelOverrides`.
+- model: `id` (required), `name`, `api`, `baseUrl`, `reasoning`, `thinkingLevelMap`, `input:("text"|"image")[]` (default `["text"]`), `inputLimits`, `cost{input,output,cacheRead,cacheWrite,tiers[]}`, `promptCache{short,long}`, `contextWindow` (default 128000), `maxTokens` (default 16384), `samplingParams`, `samplingParamsByThinkingLevel`, `headers`, `compat`.
+- `modelOverrides`: overrides built-in/extension models by model id; object fields (such as `cost`) merge key by key, other fields are replaced wholesale; unknown ids are ignored.
+- Value resolution: `apiKey`/`headers` support `$NAME`, `${NAME}`, literals, and `!command`; `$$`/`$!` escape to literal `$`/`!`; commands execute at request time and are not cached (`docs/models.md:65`, `src/core/resolve-config-value.ts`).
+- `compat` is a list of "verified differences", grouped by API (openai-completions / openai-responses / anthropic-messages / bedrock / mistral); fields are in `docs/models-configuration.md:105-187`. If the Kotlin version supports only two APIs, it only needs those two groups of fields.
 
-真实样本见 §3.5 同目录 `models.json`（2 个 `openai-completions` provider、9 个模型，`contextWindow`/`maxTokens` 都显式给出）。
+A real sample is the `models.json` in the same directory as §3.5 (2 `openai-completions` providers, 9 models, with `contextWindow`/`maxTokens` given explicitly).
 
 ---
 
-## 6. mcp.json / mcp-auth.json / mcp-cache.json（R，可忽略）
+## 6. mcp.json / mcp-auth.json / mcp-cache.json (R, can be ignored)
 
-`<agent-dir>/mcp.json` 与 `<cwd>/.pi/mcp.json`（项目需信任；项目条目可只写 `enabled`/`exposure`/`toolExposure` 覆盖用户条目）格式（`docs/mcp.md:44-83`）：
+`<agent-dir>/mcp.json` and `<cwd>/.pi/mcp.json` (project entries require trust; project entries may write only `enabled`/`exposure`/`toolExposure` to override user entries), format (`docs/mcp.md:44-83`):
 
 ```jsonc
 {
@@ -600,34 +598,34 @@ Kotlin 读入时必须能处理 v1/v2/v3；写出时统一 v3。**不要**把迁
 }
 ```
 
-- stdio：`command`、`args`、`env`、`cwd`；HTTP：`url`、`headers`、`oauth`；`type` 可选（`stdio|http|streamable-http`，`sse` 拒绝）。
-- 通用：`timeout`(秒，默认 60)、`enabled`(默认 true)、`exposure`(默认 `codemode`)、`toolExposure`、`description`。
-- 工具名 `mcp__<server>__<tool>`，非字母数字下划线替换为 `_`，冲突加 hash 后缀（`docs/mcp.md:77`）。
-- `env`/`headers` 值可用 `${NAME}` 或整值 `!command`。
-- `mcp-auth.json`：MCP OAuth 令牌，按 server 名 + URL 归属；`mcp-cache.json`：连接/工具缓存。两者都可整体忽略。
+- stdio: `command`, `args`, `env`, `cwd`; HTTP: `url`, `headers`, `oauth`; `type` is optional (`stdio|http|streamable-http`, `sse` is rejected).
+- Common: `timeout` (seconds, default 60), `enabled` (default true), `exposure` (default `codemode`), `toolExposure`, `description`.
+- Tool names are `mcp__<server>__<tool>`; non-alphanumeric/underscore characters are replaced with `_`, and conflicts get a hash suffix (`docs/mcp.md:77`).
+- `env`/`headers` values may use `${NAME}` or a whole-value `!command`.
+- `mcp-auth.json`: MCP OAuth tokens, keyed by server name + URL; `mcp-cache.json`: connection/tool cache. Both can be ignored entirely.
 
-Kotlin 版若不实现 MCP：**只解析不连接**，且保证 `mcp.json` 存在时不报错、不影响其它启动路径。
+If the Kotlin version does not implement MCP: **parse only, do not connect**, and ensure that the presence of `mcp.json` does not error or affect other startup paths.
 
 ---
 
-## 7. trust.json（R+W）
+## 7. trust.json (R+W)
 
-路径 `<agent-dir>/trust.json`，结构 `Record<canonicalAbsPath, boolean|null>`（`src/core/trust-manager.ts:33-43`）：
+Path `<agent-dir>/trust.json`, structure `Record<canonicalAbsPath, boolean|null>` (`src/core/trust-manager.ts:33-43`):
 
 ```json
 { "/home/user": true, "/home/user/dev/skills": true, "/home/user/project": true }
 ```
 
-- 查找：从 `cwd` 规范化（realpath）后向上找最近一个 `true`/`false` 条目；`null` 表示"在该目录显式清空继承的信任"（`trust-manager.ts:63-80`）。
-- 需要信任的项目资源：`settings.json`、`mcp.json`、`extensions/`、`skills/`、`prompts/`、`themes/`、`SYSTEM.md`、`APPEND_SYSTEM.md`（`trust-manager.ts:43-53`）。
-- 写入用文件锁（`proper-lockfile`）。与真 pi 共存时**不要重写整个文件**，只更新自己的键。
-- 非交互模式遇到未信任但有上述资源的项目：默认不加载，并给 diagnostic（`src/core/project-trust.ts`）。
+- Lookup: canonicalize (realpath) `cwd`, then walk upward to the nearest `true`/`false` entry; `null` means "explicitly clear inherited trust at this directory" (`trust-manager.ts:63-80`).
+- Project resources requiring trust: `settings.json`, `mcp.json`, `extensions/`, `skills/`, `prompts/`, `themes/`, `SYSTEM.md`, `APPEND_SYSTEM.md` (`trust-manager.ts:43-53`).
+- Writes use a file lock (`proper-lockfile`). When coexisting with real pi, **do not rewrite the whole file**; update only your own keys.
+- In non-interactive mode, an untrusted project that has the above resources: do not load them by default, and emit a diagnostic (`src/core/project-trust.ts`).
 
 ---
 
-## 8. keybindings.json（R，写为可选项）
+## 8. keybindings.json (R, writing optional)
 
-路径 `<agent-dir>/keybindings.json`，结构：`Record<actionId, string | string[]>`（空数组 = 禁用该动作）。依据 `docs/keybindings.md:9-32`。
+Path `<agent-dir>/keybindings.json`, structure: `Record<actionId, string | string[]>` (an empty array disables the action). Based on `docs/keybindings.md:9-32`.
 
 ```jsonc
 {
@@ -638,15 +636,13 @@ Kotlin 版若不实现 MCP：**只解析不连接**，且保证 `mcp.json` 存�
 }
 ```
 
-- 键名语法：`modifier+key`，modifier ∈ `ctrl|shift|alt|super`（可组合）；key ∈ `a-z`、`0-9`、`escape|esc|enter|return|tab|space|backspace|delete|insert|clear|home|end|pageUp|pageDown|up|down|left|right`、`f1-f12`、符号 `` ` - = [ ] \ ; ' , . / ! @ # $ % ^ & * ( ) _ + | ~ { } : < > ? ``。
-- 动作 id 两组：`app.*` 43 个（`src/core/keybindings.ts:26-170`，如 `app.interrupt`=escape、`app.clear`=ctrl+c、`app.exit`=ctrl+d、`app.thinking.cycle`=shift+tab、`app.model.cycleForward`=ctrl+p、`app.model.select`=ctrl+l、`app.tools.expand`=ctrl+o、`app.thinking.toggle`=ctrl+t、`app.session.toggleNamedFilter`=ctrl+n、`app.editor.external`=ctrl+g、`app.message.copy`=ctrl+x、`app.message.followUp`=alt+enter、`app.message.dequeue`=alt+up、`app.clipboard.pasteImage`=ctrl+v…）与 `tui.*` 94 个（来自 pi-tui，`packages/tui/src/keybindings.ts`）。
-- 旧格式迁移：`migrateKeybindingsConfig`（`src/migrations.ts:157-172` 调用）。Kotlin 版若不实现 TUI，可只解析并忽略；但**必须容忍文件存在**。
+- Key syntax: `modifier+key`, modifier ∈ `ctrl|shift|alt|super` (combinable); key ∈ `a-z`, `0-9`, `escape|esc|enter|return|tab|space|backspace|delete|insert|clear|home|end|pageUp|pageDown|up|down|left|right`, `f1-f12`, and the symbols `` ` - = [ ] \ ; ' , . / ! @ # $ % ^ & * ( ) _ + | ~ { } : < > ? ``.
+- Two groups of action ids: 43 `app.*` (`src/core/keybindings.ts:26-170`, such as `app.interrupt`=escape, `app.clear`=ctrl+c, `app.exit`=ctrl+d, `app.thinking.cycle`=shift+tab, `app.model.cycleForward`=ctrl+p, `app.model.select`=ctrl+l, `app.tools.expand`=ctrl+o, `app.thinking.toggle`=ctrl+t, `app.session.toggleNamedFilter`=ctrl+n, `app.editor.external`=ctrl+g, `app.message.copy`=ctrl+x, `app.message.followUp`=alt+enter, `app.message.dequeue`=alt+up, `app.clipboard.pasteImage`=ctrl+v...) and 94 `tui.*` (from pi-tui, `packages/tui/src/keybindings.ts`).
+- Legacy format migration: `migrateKeybindingsConfig` (called at `src/migrations.ts:157-172`). If the Kotlin version does not implement a TUI, it can parse and ignore this; but it **must tolerate the file's presence**.
 
----
+## 9. themes/*.json (R)
 
-## 9. themes/*.json（R）
-
-位置：`<agent-dir>/themes/<name>.json`、`.pi/themes/`、settings `themes`、包。内置 `dark`/`light` 在 `src/modes/interactive/theme/*.json`，默认 `system`（`docs/themes.md:22,38`）。
+Location: `<agent-dir>/themes/<name>.json`, `.pi/themes/`, settings `themes`, packages. The built-in `dark`/`light` live in `src/modes/interactive/theme/*.json`; default is `system` (`docs/themes.md:22,38`).
 
 ```jsonc
 {
@@ -661,34 +657,34 @@ Kotlin 版若不实现 MCP：**只解析不连接**，且保证 `mcp.json` 存�
 }
 ```
 
-- 必填：`name`（唯一、不能含 `/`、不能是 `system`）、`colors`（schema 规定必填角色）。
-- 颜色写法 6 种：`#rgb`/`#rrggbb`、`oklch(L% C H)`、`okhsl(H S% L%)`、256 色索引（数字）、变量引用（`vars` 的键）、`""`（终端默认前景/背景）。变量可链式引用；缺失或循环引用 = 主题非法（`docs/themes.md:83-96`）。
-- 5 个可选色有回退：`scrollbarTrack→muted`、`scrollbarThumb→text`、`searchMatchBg→selectedBg`、`searchMatchText→text`、`thinkingMax→thinkingXhigh`（`docs/themes.md:120-130`）。
-- `export` 省略时由 `userMessageBg` 派生。
-- 主题对象是严格的：未知顶层字段/未知颜色 token 会被拒绝（`docs/themes.md:81`）。
-- 若 Kotlin 版只做 headless：**不需要解析主题**；但 HTML 导出需要 `colors`/`export` 的十六进制转换。
+- Required: `name` (unique, no `/`, not `system`) and `colors` (roles required by the schema).
+- Six color forms: `#rgb`/`#rrggbb`, `oklch(L% C H)`, `okhsl(H S% L%)`, 256-color index (number), variable reference (a key in `vars`), and `""` (terminal default foreground/background). Variables can be chained; a missing or circular reference makes the theme invalid (`docs/themes.md:83-96`).
+- 5 optional colors have fallbacks: `scrollbarTrack→muted`, `scrollbarThumb→text`, `searchMatchBg→selectedBg`, `searchMatchText→text`, `thinkingMax→thinkingXhigh` (`docs/themes.md:120-130`).
+- When `export` is omitted it is derived from `userMessageBg`.
+- Theme objects are strict: unknown top-level fields/unknown color tokens are rejected (`docs/themes.md:81`).
+- If the Kotlin version is headless-only: **theme parsing is unnecessary**; but HTML export needs hex conversion of `colors`/`export`.
 
 ---
 
-## 10. skills（R）
+## 10. skills (R)
 
-### 10.1 目录与文件
+### 10.1 Directories and files
 
 ```
-<skills-dir>/<skill-name>/SKILL.md     ← 目录形式（可移植形态）
-<skills-dir>/<name>.md                ← 根目录下直接 .md 也当 skill（Pi 特有）
+<skills-dir>/<skill-name>/SKILL.md     ← directory form (portable)
+<skills-dir>/<name>.md                ← .md files directly in the root also count as skills (Pi-specific)
 ```
 
-发现规则（`src/core/skills.ts:168-275`）：
+Discovery rules (`src/core/skills.ts:168-275`):
 
-1. 进入某目录，若含 `SKILL.md` → 该目录是技能根，**不再向下递归**（返回一个 skill）。
-2. 否则：递归子目录找 `SKILL.md`；同时若 `includeRootFiles`（初始调用为 true）则把该目录直接的 `.md` 文件当 skill。
-3. 跳过以 `.` 开头的条目与 `node_modules`；跟随符号链接（断链跳过）。
-4. 忽略文件：扫描过程中逐层叠加 `.gitignore`/`.ignore`/`.fdignore`（`skills.ts:16,47-65`）。
-5. 默认扫描 `<agent-dir>/skills`（source=user）与 `<cwd>/.pi/skills`（project），外加 `~/.agents/skills`、受信任项目的祖先 `.agents/skills`；再合并 settings `skills`、`--skill`、包资源（`package-manager.ts:2464-2570`）。
-6. 同名冲突：保留先发现的，输出 collision diagnostic（`skills.ts:426-455`）。同一文件经符号链接重复出现则静默去重。
+1. On entering a directory, if it contains `SKILL.md` → that directory is a skill root and is **not descended into** (returns one skill).
+2. Otherwise: recurse into subdirectories looking for `SKILL.md`; at the same time, when `includeRootFiles` (true on the initial call), `.md` files directly in that directory count as skills.
+3. Skip entries starting with `.` and `node_modules`; follow symlinks (skip broken links).
+4. Ignore files: `.gitignore`/`.ignore`/`.fdignore` are layered in during the scan (`skills.ts:16,47-65`).
+5. By default scan `<agent-dir>/skills` (source=user) and `<cwd>/.pi/skills` (project), plus `~/.agents/skills` and ancestor `.agents/skills` of trusted projects; then merge settings `skills`, `--skill`, and package resources (`package-manager.ts:2464-2570`).
+6. Name conflicts: keep the first found and emit a collision diagnostic (`skills.ts:426-455`). The same file appearing repeatedly through symlinks is silently deduplicated.
 
-### 10.2 SKILL.md 格式
+### 10.2 SKILL.md format
 
 ```markdown
 ---
@@ -697,24 +693,24 @@ description: Extract text and tables from PDF files. Use when reading, convertin
 disable-model-invocation: true
 ---
 
-# 正文
+# Body
 ...
 ```
 
-frontmatter 字段（`src/core/skills.ts:67-72`）：
+Frontmatter fields (`src/core/skills.ts:67-72`):
 
-| 字段 | 规则 |
+| Field | Rule |
 |---|---|
-| `name` | 缺省 = 父目录名；必须 `^[a-z0-9-]+$`、不以 `-` 开头结尾、无连续 `--`、≤64 字符（校验失败只警告，仍加载，`skills.ts:92-112`） |
-| `description` | **必填**且非空，≤1024 字符（为空则该 skill 不加载，`skills.ts:304-332`） |
-| `disable-model-invocation` | `true` 时不进系统提示词，只能 `/skill:<name>` 调用 |
-| 其它 | `license`/`compatibility`/`metadata`/`allowed-tools` 等原样保留、不解释 |
+| `name` | Defaults to the parent directory name; must match `^[a-z0-9-]+$`, not start/end with `-`, contain no consecutive `--`, and be ≤64 characters (validation failure only warns and still loads, `skills.ts:92-112`) |
+| `description` | **Required** and non-empty, ≤1024 characters (an empty value means the skill is not loaded, `skills.ts:304-332`) |
+| `disable-model-invocation` | When `true`, it does not enter the system prompt and can only be invoked via `/skill:<name>` |
+| Others | `license`/`compatibility`/`metadata`/`allowed-tools`, etc. are preserved as-is and not interpreted |
 
-frontmatter 解析器：`utils/frontmatter.ts`（YAML，支持 `---` 包裹）。
+Frontmatter parser: `utils/frontmatter.ts` (YAML, supports `---` wrapping).
 
-### 10.3 进系统提示词的格式（W，必须逐字一致）
+### 10.3 Format in the system prompt (W, must match verbatim)
 
-`formatSkillsForPrompt`（`skills.ts:358-388`）：
+`formatSkillsForPrompt` (`skills.ts:358-388`):
 
 ```text
 The following skills provide specialized instructions for specific tasks.
@@ -730,24 +726,24 @@ When a skill file references a relative path, resolve it against the skill direc
 </available_skills>
 ```
 
-- 该段作为 `skills` section 包在 `<skills>...</skills>` 内（`system-prompt.ts:174-182`）。
-- `disableModelInvocation:true` 的 skill 被过滤掉。
-- 若 `read` 工具隐藏（prepareLoadout），提示语改为 `Load a skill's file when...`，不提工具名（`system-prompt.ts:174-178`）。
-- 用户输入 `/skill:name args` 展开后的消息文本格式（`src/core/agent-session.ts:166-188` 的 `parseSkillBlock`）：
+- This block becomes the `skills` section and is wrapped in `<skills>...</skills>` (`system-prompt.ts:174-182`).
+- Skills with `disableModelInvocation:true` are filtered out.
+- If the `read` tool is hidden (prepareLoadout), the wording becomes `Load a skill's file when...` without naming the tool (`system-prompt.ts:174-178`).
+- Message text after the user enters `/skill:name args` is expanded (`parseSkillBlock` at `src/core/agent-session.ts:166-188`):
 
 ```text
 <skill name="pdf-tools" location="/abs/path/SKILL.md">
-<完整 SKILL.md 正文>
+<full SKILL.md body>
 </skill>
 
-<args 作为用户请求>
+<args as the user request>
 ```
 
 ---
 
-## 11. prompt templates（R）
+## 11. prompt templates (R)
 
-位置：`<agent-dir>/prompts/*.md`、`<cwd>/.pi/prompts/*.md`（**只加载直接子文件，不递归**）、settings `prompts`、包。文件名（去 `.md`）即命令名，例 `review.md` → `/review`（`src/core/prompt-templates.ts:134`）。
+Location: `<agent-dir>/prompts/*.md`, `<cwd>/.pi/prompts/*.md` (**only direct child files are loaded, no recursion**), settings `prompts`, packages. The filename (without `.md`) is the command name, e.g. `review.md` → `/review` (`src/core/prompt-templates.ts:134`).
 
 ```markdown
 ---
@@ -757,85 +753,83 @@ argument-hint: "[focus]"
 Review the staged changes. Focus on ${1:-correctness, security, and error handling}.
 ```
 
-- `description` 缺省时取正文第一条非空行并截断到 60 字符 + `...`（`prompt-templates.ts:136-145`）。
-- `argument-hint` 约定：`<必填>`、`[可选]`。
+- When `description` is omitted, take the first non-empty body line, truncated to 60 characters + `...` (`prompt-templates.ts:136-145`).
+- `argument-hint` convention: `<required>`, `[optional]`.
 
-参数展开（`prompt-templates.ts:76-108`，先 shell 风格分词 `parseCommandArgs` 25-61）：
+Argument expansion (`prompt-templates.ts:76-108`, after shell-style tokenization `parseCommandArgs` 25-61):
 
-| 语法 | 结果 |
+| Syntax | Result |
 |---|---|
-| `$1` `$2` … | 第 N 个位置参数（缺失 → 空串） |
-| `$@` / `$ARGUMENTS` | 全部参数用空格连接 |
-| `${N:-default}` | 第 N 个参数，空/缺失时用 default |
-| `${@:-default}` / `${ARGUMENTS:-default}` | 全部参数，空时用 default |
-| `${@:N}` | 从第 N 个开始（1-indexed，0 视为 1） |
-| `${@:N:L}` | 从第 N 个开始取 L 个 |
+| `$1` `$2` … | The Nth positional argument (missing → empty string) |
+| `$@` / `$ARGUMENTS` | All arguments joined with spaces |
+| `${N:-default}` | The Nth argument, or default when empty/missing |
+| `${@:-default}` / `${ARGUMENTS:-default}` | All arguments, or default when empty |
+| `${@:N}` | From the Nth onward (1-indexed; 0 is treated as 1) |
+| `${@:N:L}` | L arguments starting at the Nth |
 
-替换只作用于模板文本，不对参数/默认值递归替换（`prompt-templates.ts:72-74`）。引号：`"..."` 与 `'...'` 保留空格；空引号 `""` 是有效空参数。
+Substitution applies only to the template text; arguments/default values are not recursively substituted (`prompt-templates.ts:72-74`). Quotes: `"..."` and `'...'` preserve spaces; empty quotes `""` are a valid empty argument.
 
 ---
 
-## 12. 上下文文件 / 系统提示词文件（R）
+## 12. Context files / system prompt files (R)
 
-### 12.1 上下文文件（AGENTS/CLAUDE）
+### 12.1 Context files (AGENTS/CLAUDE)
 
-候选文件名顺序（`resource-loader.ts:184-199`）：
+Candidate filename order (`resource-loader.ts:184-199`):
 
 ```
 AGENTS.override.md, AGENTS.md, AGENTS.MD, CLAUDE.md, CLAUDE.MD
 ```
 
-同目录命中第一个即止。加载顺序（`loadProjectContextFiles`，232-275）：
+The first hit in a directory wins. Load order (`loadProjectContextFiles`, 232-275):
 
-1. `<agent-dir>` 里的一份（全局）。
-2. 从 `cwd` 向上直到根，每个目录一份；**由远到近**排列。
-3. 去重（按绝对路径）；git 嵌套 worktree 的影子文件不重复加载（`findShadowedContextFile`，214-231）。
-4. 不需要项目信任（`docs/configuration.md:47`）。
-5. `--no-context-files` / `-nc` 关闭。
+1. The one in `<agent-dir>` (global).
+2. One per directory from `cwd` up to the root; ordered **farthest to nearest**.
+3. Deduplicate by absolute path; shadow files from nested git worktrees are not loaded twice (`findShadowedContextFile`, 214-231).
+4. Project trust is not required (`docs/configuration.md:47`).
+5. Disabled by `--no-context-files` / `-nc`.
 
-注入 system prompt 的格式（`system-prompt.ts:79-86`）：
+Format injected into the system prompt (`system-prompt.ts:79-86`):
 
 ```text
 Project-specific instructions and guidelines:
 
 <project_instructions path="/abs/AGENTS.md">
-<文件内容>
+<file contents>
 </project_instructions>
 ```
 
-多个文件之间用空行分隔；整段包进 `<project_context>...</project_context>` section。
+Multiple files are separated by blank lines; the whole block is wrapped in the `<project_context>...</project_context>` section.
 
 ### 12.2 SYSTEM.md / APPEND_SYSTEM.md
 
-- 位置：`<agent-dir>/{SYSTEM,APPEND_SYSTEM}.md` 或 `<cwd>/.pi/{SYSTEM,APPEND_SYSTEM}.md`（项目需信任）。
-- 同名不合并，项目文件**优先**（`docs/configuration.md:39`）。
-- `SYSTEM.md` → 替换 `preamble`（`buildSystemPromptOptions.customPrompt`）。
-- `APPEND_SYSTEM.md` → 追加为 `addendum` section（`system-prompt.ts:172`）。
-- `--system-prompt` / `--append-system-prompt` 也可给文本或文件路径（`cli/args.ts:121-125`，`resource-loader.ts:167-182` 负责判断"是文本还是已存在文件"）。
+- Location: `<agent-dir>/{SYSTEM,APPEND_SYSTEM}.md` or `<cwd>/.pi/{SYSTEM,APPEND_SYSTEM}.md` (project requires trust).
+- Same names do not merge; the project file **wins** (`docs/configuration.md:39`).
+- `SYSTEM.md` → replaces `preamble` (`buildSystemPromptOptions.customPrompt`).
+- `APPEND_SYSTEM.md` → appended as the `addendum` section (`system-prompt.ts:172`).
+- `--system-prompt` / `--append-system-prompt` can also take text or a file path (`cli/args.ts:121-125`; `resource-loader.ts:167-182` decides "text or existing file").
 
-### 12.3 系统提示词 section 生成顺序（W）
+### 12.3 System prompt section generation order (W)
 
-`buildSystemPromptSections`（`system-prompt.ts:128-193`）：
+`buildSystemPromptSections` (`system-prompt.ts:128-193`):
 
 ```
-preamble            (无标签；customPrompt 或内置一句话)
-tools               <tools>...</tools>           仅在非 customPrompt 时
-rules               <rules>...</rules>           仅在非 customPrompt 时
-docs                <docs>...</docs>             仅在非 customPrompt 时
+preamble            (no tag; customPrompt or the built-in sentence)
+tools               <tools>...</tools>           only when not customPrompt
+rules               <rules>...</rules>           only when not customPrompt
+docs                <docs>...</docs>             only when not customPrompt
 addendum            <addendum>...</addendum>     APPEND_SYSTEM
 project_context     <project_context>...</project_context>
 skills              <skills>...</skills>
-cwd                 <cwd>...</cwd>               （反斜杠转 /）
-<自定义 section>     <name>...</name>             扩展传入
+cwd                 <cwd>...</cwd>               (backslashes converted to /)
+<custom section>     <name>...</name>             passed in by extensions
 ```
 
-规则段默认结尾固定两条：`Be concise in your responses`、`Show file paths clearly when working with files`（`system-prompt.ts:122-123`）；工具 guideline 去重、按工具选择顺序拼接。
+The rules section always ends with two fixed entries: `Be concise in your responses`, `Show file paths clearly when working with files` (`system-prompt.ts:122-123`); tool guidelines are deduplicated and concatenated in tool selection order.
 
----
+## 13. Extension manifest and API (R; compatibility depends on strategy)
 
-## 13. 扩展 manifest 与 API（R，兼容性取决于策略）
-
-### 13.1 包 manifest（`package.json` 的 `pi` 键）
+### 13.1 Package manifest (the `pi` key in `package.json`)
 
 ```jsonc
 {
@@ -856,44 +850,44 @@ cwd                 <cwd>...</cwd>               （反斜杠转 /）
 }
 ```
 
-约定：无 `pi` manifest 时按 `extensions/`、`skills/`、`prompts/`、`themes/` 约定目录发现（`docs/packages.md:44-74`）。宿主提供的包必须放 `peerDependencies` 且 `"*"`，不能放 `dependencies`（否则告警，`resource-loader.ts:53-98`）。
+Convention: without a `pi` manifest, discover by the conventional `extensions/`, `skills/`, `prompts/`, `themes/` directories (`docs/packages.md:44-74`). Host-provided packages must go in `peerDependencies` with `"*"`, not `dependencies` (otherwise a warning, `resource-loader.ts:53-98`).
 
-### 13.2 扩展文件形态
+### 13.2 Extension file shapes
 
-- 单文件 `.ts`/`.js` 或目录（`index.ts`/`index.js`/`package.json` main）。
-- 导出默认工厂：`export default function (pi: ExtensionAPI) {...}`，可 async（`docs/extensions.md:15-38`）。
-- 生命周期：`session_start` 里建资源、`session_shutdown` 幂等释放；不要在工厂里起进程/定时器（`docs/extensions.md:56-60`）。
-- 加载：jiti 在进程内转译，宿主包通过虚拟模块映射（`core/extensions/virtual-modules.ts`）。
+- A single `.ts`/`.js` file or a directory (`index.ts`/`index.js`/`package.json` main).
+- Export a default factory: `export default function (pi: ExtensionAPI) {...}`, which may be async (`docs/extensions.md:15-38`).
+- Lifecycle: create resources in `session_start`, release idempotently in `session_shutdown`; do not start processes/timers in the factory (`docs/extensions.md:56-60`).
+- Loading: jiti transpiles in-process, and host packages are mapped through virtual modules (`core/extensions/virtual-modules.ts`).
 
-### 13.3 ExtensionAPI（摘要，完整签名在 `core/extensions/types.ts:1592-1930`）
+### 13.3 ExtensionAPI (summary; full signatures in `core/extensions/types.ts:1592-1930`)
 
-事件（`on`）：`project_trust`、`resources_discover`、`session_start`、`session_info_changed`、`session_before_switch`、`session_before_fork`、`session_before_compact`、`session_compact`、`session_compact_failed`、`session_shutdown`、`mcp_servers_change`、`session_before_tree`、`session_tree`、`context`、`context_with_system`、`cache_warming_decision`、`before_provider_request`、`before_provider_headers`、`after_provider_response`、`provider_stream_event`、`before_agent_start`、`agent_start`、`agent_end`、`agent_before_settle`、`agent_settled`、`ui_prompt_start`、`ui_prompt_end`、`turn_start`、`turn_end`、`message_start`、`message_update`、`message_end`、`tool_execution_start`、`tool_execution_update`、`tool_execution_end`、`model_select`、`thinking_level_select`、`tool_call`、`tool_result`、`user_bash`、`input`。
+Events (`on`): `project_trust`, `resources_discover`, `session_start`, `session_info_changed`, `session_before_switch`, `session_before_fork`, `session_before_compact`, `session_compact`, `session_compact_failed`, `session_shutdown`, `mcp_servers_change`, `session_before_tree`, `session_tree`, `context`, `context_with_system`, `cache_warming_decision`, `before_provider_request`, `before_provider_headers`, `after_provider_response`, `provider_stream_event`, `before_agent_start`, `agent_start`, `agent_end`, `agent_before_settle`, `agent_settled`, `ui_prompt_start`, `ui_prompt_end`, `turn_start`, `turn_end`, `message_start`, `message_update`, `message_end`, `tool_execution_start`, `tool_execution_update`, `tool_execution_end`, `model_select`, `thinking_level_select`, `tool_call`, `tool_result`, `user_bash`, `input`.
 
-注册/操作：`registerTool`、`registerCommand`、`registerShortcut`、`registerFlag`、`getFlag`、`registerMessageRenderer`、`registerMarkdownTransformer`、`registerEntryRenderer`、`registerToolRenderer`、`sendMessage`、`sendUserMessage`、`appendEntry`、`setSessionName`/`getSessionName`、`setLabel`、`exec`、`getActiveTools`/`setActiveTools`/`getAllTools`、`getSettings`、`getCommands`、`setModel`、`getThinkingLevel`/`setThinkingLevel`、`registerProvider`、`unregisterProvider`、`registerMcpServer`/`unregisterMcpServer`/`getMcpServers`、`registerVirtualModel`/`unregisterVirtualModel`。
+Registration/operations: `registerTool`, `registerCommand`, `registerShortcut`, `registerFlag`, `getFlag`, `registerMessageRenderer`, `registerMarkdownTransformer`, `registerEntryRenderer`, `registerToolRenderer`, `sendMessage`, `sendUserMessage`, `appendEntry`, `setSessionName`/`getSessionName`, `setLabel`, `exec`, `getActiveTools`/`setActiveTools`/`getAllTools`, `getSettings`, `getCommands`, `setModel`, `getThinkingLevel`/`setThinkingLevel`, `registerProvider`, `unregisterProvider`, `registerMcpServer`/`unregisterMcpServer`/`getMcpServers`, `registerVirtualModel`/`unregisterVirtualModel`.
 
-工具定义（`types.ts:579-670`）：`{name,label,description,parameters(JSON Schema),outputSchema?,promptSnippet?,promptGuidelines?,exposure?,namespace?,annotations?,execute(id,args,signal,onUpdate,ctx),renderCall?,renderResult?,prepareArguments?,prepareLoadout?,reachesTools?,constrainedSampling?,renderShell?}`。
+Tool definition (`types.ts:579-670`): `{name,label,description,parameters(JSON Schema),outputSchema?,promptSnippet?,promptGuidelines?,exposure?,namespace?,annotations?,execute(id,args,signal,onUpdate,ctx),renderCall?,renderResult?,prepareArguments?,prepareLoadout?,reachesTools?,constrainedSampling?,renderShell?}`.
 
-扩展 UI 协议（RPC 下）：见 §14.5。
+Extension UI protocol (under RPC): see §14.5.
 
-### 13.4 若不做 TS 兼容
+### 13.4 If TS compatibility is not implemented
 
-只需保证：读到 13 个 npm 包声明时**不崩、不误删设置、能列出为"未支持"**；扩展目录里的 `.ts` 文件不被当作配置解析。
+Only guarantee: reading the 13 npm package declarations **does not crash, does not accidentally delete settings, and can list them as "unsupported"**; `.ts` files in the extension directory are not parsed as configuration.
 
 ---
 
-## 14. RPC 协议（P，逐字段）
+## 14. RPC protocol (P, field by field)
 
-### 14.1 帧
+### 14.1 Framing
 
-- 严格 JSONL：一条记录 = 一个 JSON 对象 + `\n`。
-- 切分：**只按 LF**；CRLF 输入容忍去掉尾部 `\r`；**不得**把 U+2028/U+2029 当分隔符（`docs/rpc.md:50-56`，`src/modes/rpc/jsonl.ts:1-58`）。
-- 读端要处理"一次 read 停在多字节字符中间"（UTF-8 解码器带状态）。
-- stdout 只放协议；所有诊断/日志走 stderr（`takeOverStdout`，`src/core/output-guard.ts:51-70`）。
-- 必须处理背压：客户端不读会被阻塞（Pi 侧 `waitForRawStdoutBackpressure`）。
+- Strict JSONL: one record = one JSON object + `\n`.
+- Splitting: **LF only**; CRLF input tolerates stripping a trailing `\r`; **never** treat U+2028/U+2029 as separators (`docs/rpc.md:50-56`, `src/modes/rpc/jsonl.ts:1-58`).
+- The reader must handle "a single read stopping in the middle of a multi-byte character" (stateful UTF-8 decoder).
+- stdout carries protocol only; all diagnostics/logs go to stderr (`takeOverStdout`, `src/core/output-guard.ts:51-70`).
+- Backpressure must be handled: a client that does not read will block (Pi's `waitForRawStdoutBackpressure`).
 
-### 14.2 命令（stdin）
+### 14.2 Commands (stdin)
 
-全部命令都接受可选 `id`（string），响应原样回传（`rpc-types.ts:20-74`）：
+All commands accept an optional `id` (string), echoed back in the response (`rpc-types.ts:20-74`):
 
 ```jsonc
 {"id":"req-1","type":"prompt","message":"hi","images":[{"type":"image","data":"<b64>","mimeType":"image/png"}],"streamingBehavior":"steer"|"followUp"}
@@ -931,45 +925,45 @@ cwd                 <cwd>...</cwd>               （反斜杠转 /）
 {"type":"get_commands"}
 ```
 
-`prompt` 的约束：
-- 流式中必须给 `streamingBehavior`，否则失败响应。
-- `@file` 不支持，必须走 `prompt` 的 `images`/正文。
-- 输入展开：`/skill:name`、`/template` 在入队/发送前展开；扩展命令（`/cmd`）立即执行并返回 `disposition:"handled"`（`docs/rpc-commands.md:31-34`）。
-- `data.disposition` ∈ `"handled" | "queued" | "started"`，含义分别是"扩展/输入处理器消费"、"运行中排队"、"接受并启动一次 run"（`docs/rpc-commands.md:40`）。
+`prompt` constraints:
+- While streaming, `streamingBehavior` is required, otherwise a failure response.
+- `@file` is not supported; use `prompt`'s `images`/body instead.
+- Input expansion: `/skill:name` and `/template` are expanded before enqueueing/sending; extension commands (`/cmd`) execute immediately and return `disposition:"handled"` (`docs/rpc-commands.md:31-34`).
+- `data.disposition` ∈ `"handled" | "queued" | "started"`, meaning "consumed by an extension/input handler", "queued while running", and "accepted and started a run" respectively (`docs/rpc-commands.md:40`).
 
-### 14.3 响应（stdout）
+### 14.3 Responses (stdout)
 
-成功：
+Success:
 
 ```jsonc
 {"id":"req-1","type":"response","command":"prompt","success":true,"data":{"disposition":"started"}}
 {"id":"req-2","type":"response","command":"abort","success":true}
 ```
 
-失败：
+Failure:
 
 ```jsonc
 {"id":"req-3","type":"response","command":"set_model","success":false,"error":"Model not found: invalid/model"}
-{"type":"response","command":"parse","success":false,"error":"Failed to parse command: ..."}   // 无 id
+{"type":"response","command":"parse","success":false,"error":"Failed to parse command: ..."}   // no id
 ```
 
-各命令 data 形状见 `rpc-types.ts:116-245`；重点几个：
+Data shapes per command are in `rpc-types.ts:116-245`; key ones:
 
-- `get_state`：`{model?, thinkingLevel, isStreaming, isCompacting, steeringMode, followUpMode, sessionFile?, sessionId, sessionName?, autoCompactionEnabled, messageCount, pendingMessageCount}`（`rpc-types.ts:96-109`）。
-- `get_entries`：`{entries: SessionEntry[], leafId: string|null}`；`since` 不存在时失败。
-- `get_tree`：`{tree: [{entry, children, label?, labelTimestamp?}], leafId}`。
-- `get_session_stats`：`{sessionFile, sessionId, userMessages, assistantMessages, toolCalls, toolResults, totalMessages, tokens:{input,output,cacheRead,cacheWrite,total}, cost, contextUsage?:{tokens,contextWindow,percent}}`（`docs/rpc-commands.md:534-567`）。
-- `compact`：`{summary, firstKeptEntryId, tokensBefore, estimatedTokensAfter, usage?, details}`。
-- `bash`：`{output, exitCode, cancelled, truncated, fullOutputPath?}`；流式 `bash_execution_update{id?,delta}`。
-- `get_commands`：`{commands:[{name, description?, source:"extension"|"prompt"|"skill", sourceInfo:{path,source,scope,origin,baseDir?}}]}`。
+- `get_state`: `{model?, thinkingLevel, isStreaming, isCompacting, steeringMode, followUpMode, sessionFile?, sessionId, sessionName?, autoCompactionEnabled, messageCount, pendingMessageCount}` (`rpc-types.ts:96-109`).
+- `get_entries`: `{entries: SessionEntry[], leafId: string|null}`; fails when `since` does not exist.
+- `get_tree`: `{tree: [{entry, children, label?, labelTimestamp?}], leafId}`.
+- `get_session_stats`: `{sessionFile, sessionId, userMessages, assistantMessages, toolCalls, toolResults, totalMessages, tokens:{input,output,cacheRead,cacheWrite,total}, cost, contextUsage?:{tokens,contextWindow,percent}}` (`docs/rpc-commands.md:534-567`).
+- `compact`: `{summary, firstKeptEntryId, tokensBefore, estimatedTokensAfter, usage?, details}`.
+- `bash`: `{output, exitCode, cancelled, truncated, fullOutputPath?}`; streaming `bash_execution_update{id?,delta}`.
+- `get_commands`: `{commands:[{name, description?, source:"extension"|"prompt"|"skill", sourceInfo:{path,source,scope,origin,baseDir?}}]}`.
 
-### 14.4 事件（stdout）
+### 14.4 Events (stdout)
 
-与 json 模式同一套事件（§15.2），区别：RPC **不**发 session header（用 `get_state` 拿）。RPC 独有：`bash_execution_update`、`extension_error`（`{extensionPath,event,error}`，`docs/json.md:190-194`）。
+The same event set as json mode (§15.2), except: RPC does **not** emit a session header (use `get_state`). RPC-only: `bash_execution_update`, `extension_error` (`{extensionPath,event,error}`, `docs/json.md:190-194`).
 
-### 14.5 扩展 UI 子协议
+### 14.5 Extension UI subprotocol
 
-Pi → 客户端（`rpc-types.ts:252-287`）：
+Pi → client (`rpc-types.ts:252-287`):
 
 ```jsonc
 {"type":"extension_ui_request","id":"uuid","method":"select","title":"...","options":["Allow","Block"],"timeout":10000}
@@ -983,7 +977,7 @@ Pi → 客户端（`rpc-types.ts:252-287`）：
 {"type":"extension_ui_request","id":"uuid","method":"set_editor_text","text":"..."}
 ```
 
-客户端 → Pi（仅 dialog 需要回，`rpc-types.ts:294-297`）：
+Client → Pi (only dialogs need a reply, `rpc-types.ts:294-297`):
 
 ```jsonc
 {"type":"extension_ui_response","id":"uuid","value":"Allow"}
@@ -991,69 +985,69 @@ Pi → 客户端（`rpc-types.ts:252-287`）：
 {"type":"extension_ui_response","id":"uuid","cancelled":true}
 ```
 
-- dialog 超时由 Pi 侧自动按默认值 resolve，客户端无需计时（`docs/rpc-extension-ui.md:10`）。
-- fire-and-forget 方法（notify/setStatus/setWidget/setTitle/set_editor_text）不期待响应。
-- 降级清单（`custom()` 返回 undefined、`onTerminalInput` no-op、主题相关空实现等）见 `docs/rpc-extension-ui.md:12-25`。
-- `ctx.mode === "rpc"` 且 `hasUI === true`；只有 `ctx.mode === "tui"` 才能用 `custom()`。
+- Dialog timeouts are resolved automatically by Pi with default values; the client does not need its own timer (`docs/rpc-extension-ui.md:10`).
+- Fire-and-forget methods (notify/setStatus/setWidget/setTitle/set_editor_text) do not expect a response.
+- The degradation list (`custom()` returning undefined, `onTerminalInput` no-op, empty theme-related implementations, etc.) is in `docs/rpc-extension-ui.md:12-25`.
+- `ctx.mode === "rpc"` and `hasUI === true`; only `ctx.mode === "tui"` may use `custom()`.
 
-### 14.6 生命周期与关闭
+### 14.6 Lifecycle and shutdown
 
-- `prompt` 的 `success` 只表示"接受"，不代表完成；必须等 `agent_settled`（或 `agent_end` + 自己判断）才能认为空闲。
-- 客户端应在发 prompt 前先订阅事件，避免错过快速完成。
-- 关闭：客户端关 stdin → Pi dispose runtime 后退出；扩展也可 `ctx.shutdown()`（在命令后或 `agent_settled` 后执行）。
-- 客户端还必须处理：子进程启动失败、意外退出、stderr 诊断、取消、自身超时；**不要把 stderr 当协议解析**。
+- `prompt`'s `success` only means "accepted", not completed; only `agent_settled` (or `agent_end` plus your own determination) means idle.
+- The client should subscribe to events before sending a prompt, to avoid missing a fast completion.
+- Shutdown: the client closes stdin → Pi disposes the runtime and exits; an extension can also call `ctx.shutdown()` (executed after a command or after `agent_settled`).
+- The client must also handle: subprocess startup failure, unexpected exit, stderr diagnostics, cancellation, and its own timeouts; **do not parse stderr as protocol**.
 
 ---
 
-## 15. json 模式输出（P）
+## 15. json mode output (P)
 
-### 15.1 结构
+### 15.1 Structure
 
 ```
-line 1: SessionHeader（与 §2.3 完全一致，但只用于本次 run 的会话快照）
-line 2..n: 事件，一行一个
+line 1: SessionHeader (exactly as in §2.3, but only a snapshot of this run's session)
+line 2..n: events, one per line
 ```
 
-RPC 不发 header。写入方式与 RPC 相同（原始 stdout + 背压），诊断走 stderr（`src/modes/print-mode.ts:108-127`）。
+RPC does not emit a header. Writes work the same as RPC (raw stdout + backpressure), and diagnostics go to stderr (`src/modes/print-mode.ts:108-127`).
 
-### 15.2 事件全集与字段
+### 15.2 Full event set and fields
 
-基础事件（`docs/json.md:52-68`）：
+Base events (`docs/json.md:52-68`):
 
-| 事件 | 字段 |
+| Event | Fields |
 |---|---|
-| `agent_start` | 无 |
+| `agent_start` | none |
 | `agent_end` | `messages`, `willRetry` |
 | `agent_settled` | `aborted` |
-| `turn_start` | 无 |
+| `turn_start` | none |
 | `turn_end` | `message`, `toolResults` |
 | `message_start` | `message` |
-| `message_update` | `usage`, `assistantMessageEvent`（见 §15.3） |
-| `message_end` | `message`（权威最终值） |
+| `message_update` | `usage`, `assistantMessageEvent` (see §15.3) |
+| `message_end` | `message` (authoritative final value) |
 | `tool_execution_start` | `toolCallId`, `toolName`, `args` |
 | `tool_execution_update` | `toolCallId`, `toolName`, `args`, `partialResult` |
 | `tool_execution_end` | `toolCallId`, `toolName`, `result`, `isError`, `durationMs?` |
 
-队列/状态：`queue_update{steering,followUp}`（全量当前队列）、`entry_appended{entry}`、`session_info_changed{name?}`、`thinking_level_changed{level}`。
+Queue/state: `queue_update{steering,followUp}` (the full current queues), `entry_appended{entry}`, `session_info_changed{name?}`, `thinking_level_changed{level}`.
 
-压缩：`compaction_start{reason:"manual"|"threshold"|"overflow"}`；`compaction_end{reason,result?,aborted,willRetry,errorMessage?}`，`result={summary,firstKeptEntryId,tokensBefore,estimatedTokensAfter,usage?,details}`。
+Compaction: `compaction_start{reason:"manual"|"threshold"|"overflow"}`; `compaction_end{reason,result?,aborted,willRetry,errorMessage?}`, with `result={summary,firstKeptEntryId,tokensBefore,estimatedTokensAfter,usage?,details}`.
 
-重试：`auto_retry_start{attempt,maxAttempts,delayMs,errorMessage}`、`auto_retry_end{success,attempt,finalError?}`；`summarization_retry_scheduled{attempt,maxAttempts,delayMs,errorMessage}`、`summarization_retry_attempt_start{source:"compaction",reason}` 或 `{source:"branchSummary"}`、`summarization_retry_finished`。
+Retries: `auto_retry_start{attempt,maxAttempts,delayMs,errorMessage}`, `auto_retry_end{success,attempt,finalError?}`; `summarization_retry_scheduled{attempt,maxAttempts,delayMs,errorMessage}`, `summarization_retry_attempt_start{source:"compaction",reason}` or `{source:"branchSummary"}`, `summarization_retry_finished`.
 
-### 15.3 `message_update` 的线缆压缩（必须照做）
+### 15.3 Wire compaction of `message_update` (must be followed)
 
-SDK 内部事件带累积快照；JSON/RPC 输出时（`src/modes/json-event.ts:20-61`）：
+SDK-internal events carry accumulated snapshots; for JSON/RPC output (`src/modes/json-event.ts:20-61`):
 
-1. 删除顶层 `message` 字段；顶层只留 `type:"message_update"`、`usage`（该 assistant 响应最新的累积 usage）、`assistantMessageEvent`。
-2. 每个 `assistantMessageEvent` 删除 `partial` 字段。
-3. `toolcall_start` 额外补 `id` 与 `toolName`（从 `partial.content[contentIndex]` 取）。
-4. `start`/`done`/`error` 通常被 agent loop 转成 `message_start`/`message_end`，但类型上仍允许出现在 `message_update` 里。
+1. Delete the top-level `message` field; keep only `type:"message_update"`, `usage` (the latest cumulative usage for that assistant response), and `assistantMessageEvent`.
+2. Delete the `partial` field from every `assistantMessageEvent`.
+3. Add `id` and `toolName` to `toolcall_start` (taken from `partial.content[contentIndex]`).
+4. `start`/`done`/`error` are usually converted by the agent loop into `message_start`/`message_end`, but are still allowed by type inside `message_update`.
 
-内层事件类型（`docs/json.md:74-90`）：`start`、`text_start{contentIndex}`、`text_delta{contentIndex,delta}`、`text_end{contentIndex,content}`、`thinking_start`、`thinking_delta`、`thinking_end`、`toolcall_start{contentIndex,id,toolName}`、`toolcall_delta{contentIndex,delta}`、`toolcall_end{contentIndex,toolCall}`、`done{reason,message}`、`error{reason,error}`。
+Inner event types (`docs/json.md:74-90`): `start`, `text_start{contentIndex}`, `text_delta{contentIndex,delta}`, `text_end{contentIndex,content}`, `thinking_start`, `thinking_delta`, `thinking_end`, `toolcall_start{contentIndex,id,toolName}`, `toolcall_delta{contentIndex,delta}`, `toolcall_end{contentIndex,toolCall}`, `done{reason,message}`, `error{reason,error}`.
 
-重建规则：delta 只用于实时显示；`text_end`/`thinking_end`/`toolcall_end` 的 content 覆盖；最终以 `message_end.message` 为准。`usage` 在流式期间可能一直是 0（provider 不报）。
+Rebuild rules: deltas are for live display only; content from `text_end`/`thinking_end`/`toolcall_end` overrides; the final authority is `message_end.message`. `usage` may stay 0 throughout streaming (providers that do not report it).
 
-### 15.4 示例序列
+### 15.4 Example sequence
 
 ```json
 {"type":"agent_start"}
@@ -1070,45 +1064,43 @@ SDK 内部事件带累积快照；JSON/RPC 输出时（`src/modes/json-event.ts:
 
 ---
 
-## 16. print 模式输出（P）
+## 16. print mode output (P)
 
-- stdout：只输出最后一条 assistant 消息的 text 块，**每个 text 块后加一个 `\n`**（`src/modes/print-mode.ts:149-153`）；无其他内容。
-- stderr：`stopReason==="error"` → `errorMessage` 或 `Request error`；`aborted` → 同理；`length` → `Response was truncated: the model reached its output token limit.`（print-mode.ts:145-157）。
-- 退出码：`length`/`error`/`aborted` → 1，否则 0；捕获到异常 → 1 且 stderr 打消息（print-mode.ts:163-165）。
-- 初始消息构成（`src/cli/initial-message.ts:22-43`）：`stdin 内容` + `@file 文本` + `messages[0]` 直接拼接（无分隔符），剩余 messages 依次作为后续 prompt。`@` 图片进 `initialImages`。
-- stdout 接管：非 interactive 模式所有 `console.log` 会被重定向到 stderr（`output-guard.ts:51-70`），Kotlin 版等价实现 = 把普通日志固定写 stderr。
+- stdout: only the text blocks of the last assistant message, **with a `\n` after each text block** (`src/modes/print-mode.ts:149-153`); nothing else.
+- stderr: `stopReason==="error"` → `errorMessage` or `Request error`; `aborted` → likewise; `length` → `Response was truncated: the model reached its output token limit.` (print-mode.ts:145-157).
+- Exit codes: `length`/`error`/`aborted` → 1, otherwise 0; a caught exception → 1 with the message on stderr (print-mode.ts:163-165).
+- Initial message composition (`src/cli/initial-message.ts:22-43`): `stdin content` + `@file text` + `messages[0]` concatenated directly (no separators), with the remaining messages used as subsequent prompts in order. `@` images go to `initialImages`.
+- stdout takeover: in non-interactive modes all `console.log` is redirected to stderr (`output-guard.ts:51-70`); the Kotlin equivalent = always write ordinary logs to stderr.
 
----
+## 17. Internal text protocol (W; enters session files and is read/rendered by real pi)
 
-## 17. 内部文本协议（W，会进入会话文件并被真 pi 读取/渲染）
+### 17.1 compaction summary message
 
-### 17.1 compaction summary 消息
-
-`convertToLlm` 把 `compactionSummary` 消息转成 user 文本（`core/messages.ts:11-24,176-183`）：
+`convertToLlm` converts a `compactionSummary` message into user text (`core/messages.ts:11-24,176-183`):
 
 ```text
 The conversation history before this point was compacted into the following summary:
 
 <summary>
-<summary 文本>
+<summary text>
 </summary>
 ```
 
-### 17.2 branch summary 消息
+### 17.2 branch summary message
 
-`core/messages.ts:19-24,170-175`：
+`core/messages.ts:19-24,170-175`:
 
 ```text
 The following is a summary of a branch that this conversation came back from:
 
 <summary>
-<summary 文本>
+<summary text>
 </summary>
 ```
 
-### 17.3 bash 结果转 user 文本
+### 17.3 bash result converted to user text
 
-`core/messages.ts:82-98`：
+`core/messages.ts:82-98`:
 
 ````text
 Ran `<command>`
@@ -1117,54 +1109,55 @@ Ran `<command>`
 ```
 ````
 
-无输出 → `(no output)`；取消 → 追加 `\n\n(command cancelled)`；非 0 → `\n\nCommand exited with code N`；截断 → `\n\n[Output truncated. Full output: <path>]`。
+No output → `(no output)`; cancelled → append `\n\n(command cancelled)`; non-zero → `\n\nCommand exited with code N`; truncated → `\n\n[Output truncated. Full output: <path>]`.
 
-### 17.4 压缩摘要的生成提示词（W，若要跨实现共享摘要）
+### 17.4 Compaction summary generation prompts (W, if summaries are shared across implementations)
 
-- 首次：`SUMMARIZATION_PROMPT`（`core/compaction/compaction.ts:507-538`），固定格式 `## Goal` / `## Constraints & Preferences` / `## Progress(Done/In Progress/Blocked)` / `## Key Decisions` / `## Next Steps` / `## Critical Context`。
-- 再次压缩：`UPDATE_SUMMARIZATION_PROMPT`（540-583），把旧摘要放在 `<previous-summary>` 里，要求保留已有信息。
-- 文件列表由 `formatFileOperations` 追加为 `<read-files>` / `<modified-files>` 块（`core/compaction/utils.ts`）。
-- 序列化：`[User]:`、`[Assistant]:`、`[Assistant tool calls]:`、`[Tool result]:`；thinking 丢弃；tool 结果截断 2000 字符（`docs/compaction.md:276-291`）。
+- First time: `SUMMARIZATION_PROMPT` (`core/compaction/compaction.ts:507-538`), fixed format `## Goal` / `## Constraints & Preferences` / `## Progress(Done/In Progress/Blocked)` / `## Key Decisions` / `## Next Steps` / `## Critical Context`.
+- Second compaction: `UPDATE_SUMMARIZATION_PROMPT` (540-583), placing the old summary in `<previous-summary>` and requiring existing information to be preserved.
+- The file list is appended by `formatFileOperations` as `<read-files>` / `<modified-files>` blocks (`core/compaction/utils.ts`).
+- Serialization: `[User]:`, `[Assistant]:`, `[Assistant tool calls]:`, `[Tool result]:`; thinking is dropped; tool results are truncated to 2000 characters (`docs/compaction.md:276-291`).
 
-### 17.5 系统提示词里的 docs 段（W）
+### 17.5 The docs section in the system prompt (W)
 
-内容是一段固定文本 + 四个绝对路径（`getReadmePath`/`getDocsPath`/`getExamplesPath`/`getPackageDir`），并列出"问 pi 自身时该读哪些文档"（`src/core/system-prompt.ts:162-169`）。Kotlin 版如果不再分发 docs/examples，**必须改写或删除这段**，否则模型会被指向不存在的路径。
-
----
-
-## 18. 校验清单（Kotlin 兼容性验收）
-
-按顺序执行，全部通过才算"格式兼容"：
-
-1. **读**：用本机真实 `~/.pi/agent/{settings,auth,models,mcp,trust}.json` 启动，无异常、diagnostics 合理。
-2. **读会话**：随机挑 50 个 `~/.pi/agent/sessions/**/*.jsonl`（含 v3 与可能的历史版本），`buildSessionContext` 不抛异常，模型/thinking 恢复正确，`messageCount` 与 `grep -c '"type":"message"'` 一致（注意 compaction 会裁剪上下文但不改计数）。
-3. **写会话**：新会话跑完一轮后，用真 pi `pi --session <file>` 打开并继续提问成功；`--mode json` 输出的 header 与 Kotlin 写出的首行逐字段相等（除 id/时间戳）。
-4. **写设置**：修改 `defaultModel` 后，文件里未修改字段（如 `packages`、`deviceId`、未知扩展字段）仍在；真 pi 能读。
-5. **auth 兼容**：`api_key` 与 `oauth` 两类都能解析；写入后权限 `600`；真 pi 的 `/login` 结果 Kotlin 能读，反之亦然。
-6. **模型解析**：`--model deepseek`, `--model opencode-go/deepseek-v4.1-flash:max`, `--models "opencode-go/*"` 均解析到预期模型；无凭据模型被排除。
-7. **RPC 协议**：用 `rpc-types.ts` 生成/手写的 33 条命令逐条打，成功/失败响应字段与 `command` 值正确；`get_entries?since=` 游标可用；`agent_settled` 前客户端能收到完整 delta 流。
-8. **事件压缩**：同一 mock provider 下，Kotlin 的 `--mode json` 与真 pi 的事件序列在去掉 `timestamp`/`id`/`durationMs` 后一致。
-9. **工具输出文本**：`read`（截断提示、offset 越界、首行超限）、`edit`（多编辑/CRLF/BOM/重叠报错）、`bash`（非 0 退出/超时/abort）、`grep`（limit/context/长行截断）、`find`（`**/` 语义）、`ls`（目录斜杠/排序）与真 pi 字符串级一致。
-10. **压缩**：人为构造超阈值会话，触发一次自动压缩和一次手动 `/compact`，`firstKeptEntryId`/`tokensBefore` 合理；再打开真 pi 继续对话不乱序。
-11. **skills/prompts**：本机 6 个 skill 全部被发现（含符号链接），`/skill:name` 展开文本与 §10.3 一致；`prompts/` 为空时不报错。
-12. **不支持的资源**：`~/.pi/agent/npm/` 下 13 个包、`mcp.json` 4 个 server、`models-store.json` 146KB 都只解析不执行，且启动时间不受明显影响。
+The content is a fixed text + four absolute paths (`getReadmePath`/`getDocsPath`/`getExamplesPath`/`getPackageDir`), listing "which docs to read when asking pi about itself" (`src/core/system-prompt.ts:162-169`). If the Kotlin version no longer ships docs/examples, **this section must be rewritten or removed**, otherwise the model is pointed at nonexistent paths.
 
 ---
 
-## 19. 附：必须与真 pi 对齐的"字符串常量"
+## 18. Verification checklist (Kotlin compatibility acceptance)
 
-实现时建议建一个常量文件，逐字复制（它们会拼进提示词或用作文本输出，模型行为依赖这些措辞）：
+Execute in order; only when all pass does it count as "format compatible":
 
-| 常量 | 位置 |
+1. **Read**: start with the real local `~/.pi/agent/{settings,auth,models,mcp,trust}.json`; no exceptions, sensible diagnostics.
+2. **Read sessions**: randomly pick 50 `~/.pi/agent/sessions/**/*.jsonl` (v3 and possibly historical versions), `buildSessionContext` throws no exception, model/thinking are restored correctly, and `messageCount` matches `grep -c '"type":"message"'` (note that compaction trims context but does not change the count).
+3. **Write sessions**: after a new session finishes one turn, open it with real pi `pi --session <file>` and continue asking successfully; the `--mode json` header is field-for-field equal to the first line Kotlin writes (except id/timestamps).
+4. **Write settings**: after changing `defaultModel`, unmodified fields in the file (such as `packages`, `deviceId`, unknown extension fields) are still there; real pi can read it.
+5. **auth compatibility**: both `api_key` and `oauth` parse; after writing, permissions are `600`; `/login` results from real pi are readable by Kotlin and vice versa.
+6. **Model resolution**: `--model deepseek`, `--model opencode-go/deepseek-v4.1-flash:max`, and `--models "opencode-go/*"` all resolve to the expected models; models without credentials are excluded.
+7. **RPC protocol**: punch through all 33 commands generated/hand-written from `rpc-types.ts`; success/failure response fields and `command` values are correct; the `get_entries?since=` cursor works; the client receives the full delta stream before `agent_settled`.
+8. **Event compaction**: with the same mock provider, Kotlin's `--mode json` event sequence matches real pi after removing `timestamp`/`id`/`durationMs`.
+9. **Tool output text**: `read` (truncation notice, offset out of range, first line over limit), `edit` (multi-edit/CRLF/BOM/overlap error), `bash` (non-zero exit/timeout/abort), `grep` (limit/context/long-line truncation), `find` (`**/` semantics), `ls` (directory slashes/sorting) match real pi at string level.
+10. **Compaction**: construct an over-threshold session by hand, trigger one automatic compaction and one manual `/compact`; `firstKeptEntryId`/`tokensBefore` are sensible; reopening in real pi and continuing does not scramble the order.
+11. **skills/prompts**: all 6 local skills are discovered (including symlinks), `/skill:name` expansion text matches §10.3; an empty `prompts/` does not error.
+12. **Unsupported resources**: the 13 packages under `~/.pi/agent/npm/`, the 4 servers in `mcp.json`, and the 146KB `models-store.json` are parsed but not executed, and startup time is not noticeably affected.
+
+---
+
+## 19. Appendix: string constants that must align with real pi
+
+It is recommended to create a constants file and copy these verbatim (they are spliced into prompts or used as text output, and model behavior depends on the wording):
+
+| Constant | Location |
 |---|---|
-| 默认 preamble | `src/core/system-prompt.ts:155-156` |
-| docs section 全文 | `system-prompt.ts:162-169` |
-| 默认 rules 结尾两条 | `system-prompt.ts:122-123` |
-| skills 段引导语与 XML | `src/core/skills.ts:365-387` |
-| 各工具 description / promptSnippet / promptGuidelines | `core/tools/*.ts`（read.ts:20-23,96；bash.ts:45-48,255；edit.ts:43-51,151-152；write.ts:16-19,52-53；grep.ts:35-38,78；find.ts:34-37,78；ls.ts:16-19,62） |
-| 截断提示文案 | `read.ts:182-199`，`bash.ts:338-356`，`grep.ts:286-303`，`find.ts:281-293`，`ls.ts:145-155` |
-| compaction 摘要前缀/后缀 | `core/messages.ts:11-24` |
-| bash 转 user 文本 | `core/messages.ts:82-98` |
-| 压缩/更新摘要提示词 | `core/compaction/compaction.ts:507-583` |
-| 不支持模型/凭据的错误文案 | `core/auth-guidance.ts`、`agent-session.ts:2138-2155` |
-| RPC 未知命令/解析失败文案 | `modes/rpc/rpc-mode.ts:786-810` |
+| Default preamble | `src/core/system-prompt.ts:155-156` |
+| Full docs section text | `system-prompt.ts:162-169` |
+| The two default rules endings | `system-prompt.ts:122-123` |
+| Skills section lead-in and XML | `src/core/skills.ts:365-387` |
+| Each tool's description / promptSnippet / promptGuidelines | `core/tools/*.ts` (read.ts:20-23,96; bash.ts:45-48,255; edit.ts:43-51,151-152; write.ts:16-19,52-53; grep.ts:35-38,78; find.ts:34-37,78; ls.ts:16-19,62) |
+| Truncation notice text | `read.ts:182-199`, `bash.ts:338-356`, `grep.ts:286-303`, `find.ts:281-293`, `ls.ts:145-155` |
+| Compaction summary prefix/suffix | `core/messages.ts:11-24` |
+| bash-to-user text | `core/messages.ts:82-98` |
+| Compaction/update summary prompts | `core/compaction/compaction.ts:507-583` |
+| Error text for unsupported models/credentials | `core/auth-guidance.ts`, `agent-session.ts:2138-2155` |
+| RPC unknown-command/parse-failure text | `modes/rpc/rpc-mode.ts:786-810` |
+
