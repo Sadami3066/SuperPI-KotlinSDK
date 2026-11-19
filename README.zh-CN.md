@@ -6,7 +6,7 @@
 
 [English](README.md)
 
-状态：**0.6.3**。可编译、可发布 Android AAR 与 JVM JAR；JVM 测试 1,000+、Android host 测试数百；1.0 前 API 仍可能调整。
+状态：**0.7.0**。可编译、可发布 Android AAR 与 JVM JAR；JVM 测试 1,000+、Android host 测试数百；1.0 前 API 仍可能调整。
 
 ## 模块
 
@@ -29,7 +29,7 @@
 
 暂未发布到 Maven Central，三种方式：
 
-**JitPack**：加入仓库，用 Git tag 作为版本（`v0.6.3`）：
+**JitPack**：加入仓库，用 Git tag 作为版本（`v0.7.0`）：
 
 ```kotlin
 // settings.gradle.kts
@@ -40,10 +40,10 @@ repositories {
 
 ```kotlin
 // JVM
-implementation("com.github.Sadami3066.DeepDeep-KotlinSDK:pi-coding-agent:v0.6.3")
+implementation("com.github.Sadami3066.SuperPI-KotlinSDK:pi-coding-agent:v0.7.0")
 
 // Android
-implementation("com.github.Sadami3066.DeepDeep-KotlinSDK:pi-coding-agent-android:v0.6.3")
+implementation("com.github.Sadami3066.SuperPI-KotlinSDK:pi-coding-agent-android:v0.7.0")
 ```
 
 JitPack 首次被请求某个 tag 时现场构建，第一次解析可能较慢；之后复用缓存。`pi-ai`、`pi-agent`、`pi-mcp` 用同一个 group 与 tag。
@@ -67,10 +67,10 @@ repositories {
 
 ```kotlin
 // JVM
-implementation("io.github.whywood.deepdeep.sdk:pi-coding-agent:0.6.3")
+implementation("io.github.whywood.superpi.sdk:pi-coding-agent:0.7.0")
 
 // Android
-implementation("io.github.whywood.deepdeep.sdk:pi-coding-agent-android:0.6.3")
+implementation("io.github.whywood.superpi.sdk:pi-coding-agent-android:0.7.0")
 ```
 
 Android 工程还需要 `android.useAndroidX=true`。
@@ -78,12 +78,12 @@ Android 工程还需要 `android.useAndroidX=true`。
 ## 快速开始
 
 ```kotlin
-import io.github.whywood.deepdeep.sdk.ai.TextDeltaEvent
-import io.github.whywood.deepdeep.sdk.ai.http.okHttpTransport
-import io.github.whywood.deepdeep.sdk.agent.AgentEvent
-import io.github.whywood.deepdeep.sdk.coding.AgentSessionOptions
-import io.github.whywood.deepdeep.sdk.coding.createAgentSession
-import io.github.whywood.deepdeep.sdk.coding.session.SessionEvent
+import io.github.whywood.superpi.sdk.ai.TextDeltaEvent
+import io.github.whywood.superpi.sdk.ai.http.okHttpTransport
+import io.github.whywood.superpi.sdk.agent.AgentEvent
+import io.github.whywood.superpi.sdk.coding.AgentSessionOptions
+import io.github.whywood.superpi.sdk.coding.createAgentSession
+import io.github.whywood.superpi.sdk.coding.session.SessionEvent
 import okio.Path.Companion.toPath
 
 val session = createAgentSession(
@@ -177,9 +177,9 @@ Android demo 位于 `examples/android-demo`（独立 Gradle 工程），内置�
 ```bash
 ./gradlew build                           # 编译全部 target 并跑测试
 ./gradlew :pi-ai:jvmTest                  # 只跑 JVM 快速测试
-./gradlew publishToMavenLocal             # 发布 io.github.whywood.deepdeep.sdk:* 到本地
-node scripts/verify-release.mjs 0.6.3     # 校验发布产物（Java 17 字节码/AAR/POM）
-./scripts/release-local.sh 0.6.3          # clean build + 测试 + 本地发布 + demo + 校验和
+./gradlew publishToMavenLocal             # 发布 io.github.whywood.superpi.sdk:* 到本地
+node scripts/verify-release.mjs 0.7.0     # 校验发布产物（Java 17 字节码/AAR/POM）
+./scripts/release-local.sh 0.7.0          # clean build + 测试 + 本地发布 + demo + 校验和
 ```
 
 低内存机器用 `./scripts/gw.sh <tasks>` 替代 `./gradlew`（串行化构建）。

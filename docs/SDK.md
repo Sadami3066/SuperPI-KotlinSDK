@@ -6,11 +6,11 @@ A coding agent SDK for Android / JVM apps: pi's (TypeScript) `pi-ai`, `pi-agent`
 
 ```kotlin
 dependencies {
-    implementation("io.github.whywood.deepdeep.sdk:pi-coding-agent:0.6.3")
+    implementation("io.github.whywood.superpi.sdk:pi-coding-agent:0.7.0")
 }
 ```
 
-On Android use `io.github.whywood.deepdeep.sdk:pi-coding-agent-android:0.6.3`. Artifacts are not published to Maven Central yet; there are two ways to get them:
+On Android use `io.github.whywood.superpi.sdk:pi-coding-agent-android:0.7.0`. Artifacts are not published to Maven Central yet; there are two ways to get them:
 
 **JitPack** (built per tag; the first request can be slow):
 
@@ -21,11 +21,11 @@ repositories {
 }
 
 // modules
-implementation("com.github.Sadami3066.DeepDeep-KotlinSDK:pi-coding-agent:v0.6.3")        // JVM
-implementation("com.github.Sadami3066.DeepDeep-KotlinSDK:pi-coding-agent-android:v0.6.3") // Android
+implementation("com.github.Sadami3066.SuperPI-KotlinSDK:pi-coding-agent:v0.7.0")        // JVM
+implementation("com.github.Sadami3066.SuperPI-KotlinSDK:pi-coding-agent-android:v0.7.0") // Android
 ```
 
-**Local publish**: run `./gradlew publishToMavenLocal`, then depend on `io.github.whywood.deepdeep.sdk:*:0.6.3`.
+**Local publish**: run `./gradlew publishToMavenLocal`, then depend on `io.github.whywood.superpi.sdk:*:0.7.0`.
 
 Modules: `pi-ai` (unified LLM layer) → `pi-agent` (agent loop) → `pi-coding-agent` (sessions/tools/prompts/SDK facade). Targets: Android (minSdk 26) + JVM (Java 17 bytecode).
 

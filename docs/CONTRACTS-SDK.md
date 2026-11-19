@@ -1,6 +1,6 @@
 # pi-coding-agent SDK contract (M5)
 
-All new code goes in `pi-coding-agent/src/commonMain/kotlin/io/github/whywood/deepdeep/sdk/coding/`, tests in `commonTest`. Platform-agnostic: only okio (`okio.FileSystem`/`Path`), kotlinx.serialization, coroutines; `java.*`, `File`, `ProcessBuilder`, and `System.getenv` are forbidden.
+All new code goes in `pi-coding-agent/src/commonMain/kotlin/io/github/whywood/superpi/sdk/coding/`, tests in `commonTest`. Platform-agnostic: only okio (`okio.FileSystem`/`Path`), kotlinx.serialization, coroutines; `java.*`, `File`, `ProcessBuilder`, and `System.getenv` are forbidden.
 
 ## General
 

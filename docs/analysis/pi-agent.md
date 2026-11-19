@@ -805,7 +805,7 @@ Imported from `@earendil-works/pi-agent-core` (`ca/core/agent-session.ts:19-33`)
 
 ### 8.1 Module and package layout
 
-Keep the existing Gradle multi-module layout: `:pi-ai` → `:pi-agent` → `:pi-coding-agent`; `pi-agent` depends on `pi-ai`, and all new code goes in `pi-agent/src/main/kotlin/io/github/whywood/deepdeep/sdk/agent/`. `pi-agent` should not depend on okhttp (the proxy depends only on `java.net.http` or reuses pi-ai's HTTP abstraction; the existing `pi-ai/build.gradle.kts` already includes okhttp, so either move the proxy's HTTP client into pi-ai or use the JDK HttpClient directly in pi-agent to avoid a new dependency).
+Keep the existing Gradle multi-module layout: `:pi-ai` → `:pi-agent` → `:pi-coding-agent`; `pi-agent` depends on `pi-ai`, and all new code goes in `pi-agent/src/main/kotlin/io/github/whywood/superpi/sdk/agent/`. `pi-agent` should not depend on okhttp (the proxy depends only on `java.net.http` or reuses pi-ai's HTTP abstraction; the existing `pi-ai/build.gradle.kts` already includes okhttp, so either move the proxy's HTTP client into pi-ai or use the JDK HttpClient directly in pi-agent to avoid a new dependency).
 
 Suggested package split:
 
@@ -1027,7 +1027,7 @@ Verify each item when implementing; reference the numbers directly in Kotlin tes
 
 ### 8.11 File-level breakdown and code-size estimate
 
-Main code (`pi-agent/src/main/kotlin/io/github/whywood/deepdeep/sdk/agent/`):
+Main code (`pi-agent/src/main/kotlin/io/github/whywood/superpi/sdk/agent/`):
 
 | File | Contents | Estimated lines |
 |---|---|---|
@@ -1038,7 +1038,7 @@ Main code (`pi-agent/src/main/kotlin/io/github/whywood/deepdeep/sdk/agent/`):
 | `StreamFn.kt` | Global default StreamFn | 25-35 |
 | **Main code total** | | **about 2000-2450** |
 
-Test code (`pi-agent/src/test/kotlin/io/github/whywood/deepdeep/sdk/agent/`):
+Test code (`pi-agent/src/test/kotlin/io/github/whywood/superpi/sdk/agent/`):
 
 | File | Contents | Estimated lines |
 |---|---|---|

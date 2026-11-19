@@ -9,7 +9,7 @@ pi2kotlin is a Kotlin Multiplatform SDK for building **mobile agent apps**: it r
 | Item | Choice | Rationale |
 |---|---|---|
 | Form | Kotlin Multiplatform library | Android first, JVM for tests/server; iOS can be added as a target later |
-| Targets | `androidTarget` (minSdk 26) + `jvm` (JDK 17) | Mobile agent apps + JVM tests/desktop reuse; iOS is not wired up yet (adding a target requires `io.github.whywood.deepdeep.sdk.ai.platform` actuals plus platform HTTP/file implementations) |
+| Targets | `androidTarget` (minSdk 26) + `jvm` (JDK 17) | Mobile agent apps + JVM tests/desktop reuse; iOS is not wired up yet (adding a target requires `io.github.whywood.superpi.sdk.ai.platform` actuals plus platform HTTP/file implementations) |
 | Build | Gradle 9.8.2 + Kotlin 2.4.21 + AGP 9.x | The existing project is already set up |
 | JSON | kotlinx.serialization | Native to KMP; sealed discriminator keys match upstream JSON |
 | Concurrency/streaming | kotlinx.coroutines (Flow + Channel) | Native to KMP; maps to upstream async iterator/Promise |
@@ -34,13 +34,13 @@ Dependency direction: `pi-coding-agent` → `pi-agent` → `pi-ai`.
 ```
 src/commonMain/kotlin/      Pure Kotlin logic and types (all protocol parsing, agent logic, validation, compaction…)
 src/commonTest/kotlin/      Shared tests
-src/jvmMain/kotlin/         JVM platform implementations (OkHttp transport, files, credentials, io.github.whywood.deepdeep.sdk.ai.platform actuals)
+src/jvmMain/kotlin/         JVM platform implementations (OkHttp transport, files, credentials, io.github.whywood.superpi.sdk.ai.platform actuals)
 src/androidMain/kotlin/     Android platform implementations (same as above)
 ```
 
-The platform boundary converges on expect/actual in `io.github.whywood.deepdeep.sdk.ai.platform` (`platformCurrentTimeMillis`, `platformSecureRandomBytes`, `platformEnv`, `PlatformAtomicBoolean`; the actuals live in `pi-ai/src/jvmMain` and `pi-ai/src/androidMain`, and pi-agent reuses them via `api(project(":pi-ai"))`), plus interface injection (`HttpTransport`, `FileSystem`, `CredentialStore`, `ModelCatalogSource`). They are injected when constructing `PiClient`/`AgentSession`; default factories are provided in the platform source sets (Android defaults to OkHttp + app-private directory).
+The platform boundary converges on expect/actual in `io.github.whywood.superpi.sdk.ai.platform` (`platformCurrentTimeMillis`, `platformSecureRandomBytes`, `platformEnv`, `PlatformAtomicBoolean`; the actuals live in `pi-ai/src/jvmMain` and `pi-ai/src/androidMain`, and pi-agent reuses them via `api(project(":pi-ai"))`), plus interface injection (`HttpTransport`, `FileSystem`, `CredentialStore`, `ModelCatalogSource`). They are injected when constructing `PiClient`/`AgentSession`; default factories are provided in the platform source sets (Android defaults to OkHttp + app-private directory).
 
-The current targets are android + jvm only. OS-specific differences are allowed only in `io.github.whywood.deepdeep.sdk.ai.platform` and the platform source sets; `commonMain` does not use `java.*`/`javax.*`/`System.*`. Elapsed-time measurement uses `kotlin.time.TimeSource.Monotonic` directly and does not enter the platform abstraction. Adding an iOS target requires actuals for all the expect declarations above (otherwise commonMain will not compile) and platform HTTP/file implementations; iOS is not claimed as supported today.
+The current targets are android + jvm only. OS-specific differences are allowed only in `io.github.whywood.superpi.sdk.ai.platform` and the platform source sets; `commonMain` does not use `java.*`/`javax.*`/`System.*`. Elapsed-time measurement uses `kotlin.time.TimeSource.Monotonic` directly and does not enter the platform abstraction. Adding an iOS target requires actuals for all the expect declarations above (otherwise commonMain will not compile) and platform HTTP/file implementations; iOS is not claimed as supported today.
 
 ## Key design decisions
 

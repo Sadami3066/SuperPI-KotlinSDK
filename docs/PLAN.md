@@ -136,7 +136,7 @@ This round fixes and verifies the 14 P1/P2 items and completion-boundary issues 
 | P2.12 grep/find ignore semantics | Added `GitIgnoreMatcher` (nested/negation/directory/anchored/glob); streaming early stop on limit + RunSignal cancellation | 44 tests (tools + matcher + early stop/cancellation) |
 | P2.13 Validation subset | Added numeric/string/array constraints, local `$ref`/`$defs`, 21 formats; error text compared verbatim against TypeBox 1.3.27 goldens | ValidationTest 35 tests (60 golden assertions) |
 | P2.14 PKCE randomness source | `oauthRandomBytes` defaults to `platformSecureRandomBytes` (`java.security.SecureRandom`) | PkceTest + PlatformAbstractionTest |
-| Platform leakage | Platform differences converge in `io.github.whywood.deepdeep.sdk.ai.platform` (time/random/env/atomic); commonMain has no `java.*` imports | grep check + `PlatformAbstractionTest` |
+| Platform leakage | Platform differences converge in `io.github.whywood.superpi.sdk.ai.platform` (time/random/env/atomic); commonMain has no `java.*` imports | grep check + `PlatformAbstractionTest` |
 | Release inconsistency | Version unified at `0.1.0`; `jvmToolchain(17)` artifacts have class major=61; bilingual README, LICENSE, RELEASE docs | `scripts/verify-release.mjs` 32/32 PASS; `scripts/release-local.sh` full run passes |
 
 Test gaps were filled at the same time: fixed JSONL/protocol fixtures (hand-written in TS format, runnable by default), real-data scanning moved behind the `PI2K_REAL_SESSIONS_DIR` opt-in, and 18 SDK combination scenarios.

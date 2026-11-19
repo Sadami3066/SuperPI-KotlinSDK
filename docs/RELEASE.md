@@ -1,18 +1,18 @@
 # Release and artifact verification
 
-For maintainers. Current version: `0.6.3` (`subprojects.version` in the root `build.gradle.kts`).
+For maintainers. Current version: `0.7.0` (`subprojects.version` in the root `build.gradle.kts`).
 
 ## Local release flow
 
 ```bash
-./scripts/release-local.sh 0.6.3
+./scripts/release-local.sh 0.7.0
 ```
 
 The script runs the following in order:
 
 1. `./gradlew clean build` (compile and test the JVM + Android targets)
-2. `./gradlew publishToMavenLocal` (publish `io.github.whywood.deepdeep.sdk:pi-ai-jvm`, `pi-ai-android`, `pi-agent-*`, `pi-coding-agent-*`, including sources jars and POMs)
-3. `node scripts/verify-release.mjs 0.6.3` (verify artifact completeness and bytecode version)
+2. `./gradlew publishToMavenLocal` (publish `io.github.whywood.superpi.sdk:pi-ai-jvm`, `pi-ai-android`, `pi-agent-*`, `pi-coding-agent-*`, including sources jars and POMs)
+3. `node scripts/verify-release.mjs 0.7.0` (verify artifact completeness and bytecode version)
 4. `./gradlew :examples:jvm-demo:run` (JVM end-to-end demo)
 5. Build the Android demo APK (standalone project consuming the locally published artifacts)
 6. Generate `build/release-manifest.txt` (version, generation time, sha256 of jar/aar/apk)
@@ -23,11 +23,11 @@ On low-memory machines the script should run builds serially through `scripts/gw
 
 | Artifact | Path |
 |---|---|
-| JVM jar | `~/.m2/repository/io/github/whywood/deepdeep/sdk/<module>-jvm/0.6.3/<module>-jvm-0.6.3.jar` |
-| JVM sources | `~/.m2/repository/io/github/whywood/deepdeep/sdk/<module>-jvm/0.6.3/<module>-jvm-0.6.3-sources.jar` |
-| Gradle metadata | `~/.m2/repository/io/github/whywood/deepdeep/sdk/<module>-jvm/0.6.3/<module>-jvm-0.6.3.module` |
-| POM | `~/.m2/repository/io/github/whywood/deepdeep/sdk/<module>-jvm/0.6.3/<module>-jvm-0.6.3.pom` |
-| Android AAR | `~/.m2/repository/io/github/whywood/deepdeep/sdk/<module>-android/0.6.3/<module>-android-0.6.3.aar` |
+| JVM jar | `~/.m2/repository/io/github/whywood/superpi/sdk/<module>-jvm/0.7.0/<module>-jvm-0.7.0.jar` |
+| JVM sources | `~/.m2/repository/io/github/whywood/superpi/sdk/<module>-jvm/0.7.0/<module>-jvm-0.7.0-sources.jar` |
+| Gradle metadata | `~/.m2/repository/io/github/whywood/superpi/sdk/<module>-jvm/0.7.0/<module>-jvm-0.7.0.module` |
+| POM | `~/.m2/repository/io/github/whywood/superpi/sdk/<module>-jvm/0.7.0/<module>-jvm-0.7.0.pom` |
+| Android AAR | `~/.m2/repository/io/github/whywood/superpi/sdk/<module>-android/0.7.0/<module>-android-0.7.0.aar` |
 | Demo APK | `examples/android-demo/build/outputs/apk/debug/pi2kotlin-android-demo-debug.apk` |
 
 ## Checks
@@ -42,7 +42,7 @@ On low-memory machines the script should run builds serially through `scripts/gw
 ## Version and JVM target
 
 - The version is set in one place: `subprojects { version = ... }` in the root `build.gradle.kts`
-- After a `v<version>` tag is pushed, JitPack builds that tag; the dependency version is the tag name (for example `v0.6.3`)
+- After a `v<version>` tag is pushed, JitPack builds that tag; the dependency version is the tag name (for example `v0.7.0`)
 - The JVM target uses `jvmToolchain(17)`, so published artifacts are Java 17 bytecode; the Android target compiles to 17 as well
 - The JVM requirements in README / SDK docs must match the actual bytecode; re-run `verify-release.mjs` after changing the toolchain
 

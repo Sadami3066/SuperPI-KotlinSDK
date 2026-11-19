@@ -5,6 +5,6 @@ plugins {
 }
 
 subprojects {
-    group = "io.github.whywood.deepdeep.sdk"
-    version = "0.6.3"
+    group = "io.github.whywood.superpi.sdk"
+    version = "0.7.0"
 }

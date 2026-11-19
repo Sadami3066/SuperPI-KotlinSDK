@@ -6,7 +6,7 @@ A Kotlin Multiplatform SDK for building AI agent apps on **Android and the JVM**
 
 [中文文档](README.zh-CN.md)
 
-Status: **0.6.3**. The library builds, ships Android AARs and JVM JARs, and is covered by 1,000+ JVM tests plus Android host tests. API shape may still change before 1.0.
+Status: **0.7.0**. The library builds, ships Android AARs and JVM JARs, and is covered by 1,000+ JVM tests plus Android host tests. API shape may still change before 1.0.
 
 ## Modules
 
@@ -29,7 +29,7 @@ Dependency direction: `pi-coding-agent` → `pi-agent` → `pi-ai`, and `pi-codi
 
 Artifacts are not on Maven Central yet. Three options:
 
-**JitPack**: add the repository and use the Git tag as the version (`v0.6.3`):
+**JitPack**: add the repository and use the Git tag as the version (`v0.7.0`):
 
 ```kotlin
 // settings.gradle.kts
@@ -40,10 +40,10 @@ repositories {
 
 ```kotlin
 // JVM
-implementation("com.github.Sadami3066.DeepDeep-KotlinSDK:pi-coding-agent:v0.6.3")
+implementation("com.github.Sadami3066.SuperPI-KotlinSDK:pi-coding-agent:v0.7.0")
 
 // Android
-implementation("com.github.Sadami3066.DeepDeep-KotlinSDK:pi-coding-agent-android:v0.6.3")
+implementation("com.github.Sadami3066.SuperPI-KotlinSDK:pi-coding-agent-android:v0.7.0")
 ```
 
 JitPack builds the tagged commit on first request, so the first resolve can take a few minutes; later requests reuse the cached build. `pi-ai`, `pi-agent` and `pi-mcp` are published under the same group and tag.
@@ -67,10 +67,10 @@ Then depend on the variant you need:
 
 ```kotlin
 // JVM
-implementation("io.github.whywood.deepdeep.sdk:pi-coding-agent:0.6.3")
+implementation("io.github.whywood.superpi.sdk:pi-coding-agent:0.7.0")
 
 // Android
-implementation("io.github.whywood.deepdeep.sdk:pi-coding-agent-android:0.6.3")
+implementation("io.github.whywood.superpi.sdk:pi-coding-agent-android:0.7.0")
 ```
 
 Android apps also need `android.useAndroidX=true`.
@@ -78,12 +78,12 @@ Android apps also need `android.useAndroidX=true`.
 ## Quick start
 
 ```kotlin
-import io.github.whywood.deepdeep.sdk.ai.TextDeltaEvent
-import io.github.whywood.deepdeep.sdk.ai.http.okHttpTransport
-import io.github.whywood.deepdeep.sdk.agent.AgentEvent
-import io.github.whywood.deepdeep.sdk.coding.AgentSessionOptions
-import io.github.whywood.deepdeep.sdk.coding.createAgentSession
-import io.github.whywood.deepdeep.sdk.coding.session.SessionEvent
+import io.github.whywood.superpi.sdk.ai.TextDeltaEvent
+import io.github.whywood.superpi.sdk.ai.http.okHttpTransport
+import io.github.whywood.superpi.sdk.agent.AgentEvent
+import io.github.whywood.superpi.sdk.coding.AgentSessionOptions
+import io.github.whywood.superpi.sdk.coding.createAgentSession
+import io.github.whywood.superpi.sdk.coding.session.SessionEvent
 import okio.Path.Companion.toPath
 
 val session = createAgentSession(
@@ -177,9 +177,9 @@ The Android demo lives in `examples/android-demo` (standalone Gradle build) and 
 ```bash
 ./gradlew build                           # compile all targets and run all tests
 ./gradlew :pi-ai:jvmTest                  # fast JVM-only tests
-./gradlew publishToMavenLocal             # publish io.github.whywood.deepdeep.sdk:* artifacts locally
-node scripts/verify-release.mjs 0.6.3     # verify published artifacts (Java 17 bytecode, AARs, POMs)
-./scripts/release-local.sh 0.6.3          # clean build + tests + local publish + demos + checksums
+./gradlew publishToMavenLocal             # publish io.github.whywood.superpi.sdk:* artifacts locally
+node scripts/verify-release.mjs 0.7.0     # verify published artifacts (Java 17 bytecode, AARs, POMs)
+./scripts/release-local.sh 0.7.0          # clean build + tests + local publish + demos + checksums
 ```
 
 On low-memory machines use `./scripts/gw.sh <tasks>` instead of `./gradlew` to serialize Gradle runs.

@@ -6,7 +6,7 @@
 
 This file freezes the public signatures that parallel development depends on. Implementers must not change signatures owned by other tasks; notify the lead before requesting a change.
 
-## Existing public types (pi-ai, `io.github.whywood.deepdeep.sdk.ai`)
+## Existing public types (pi-ai, `io.github.whywood.superpi.sdk.ai`)
 
 ```kotlin
 val PiJson: Json
@@ -29,14 +29,14 @@ data class SimpleStreamOptions(val stream: StreamOptions, val toolChoice, val re
 ## task-4 (HTTP/streaming foundation) exposure
 
 ```kotlin
-// io.github.whywood.deepdeep.sdk.ai.http
+// io.github.whywood.superpi.sdk.ai.http
 class SseEvent(val event: String?, val data: String, val id: String?, val retry: Long?)
 class SseParser(source: BufferedSource) { suspend fun next(): SseEvent? ; fun close() }
 
-// io.github.whywood.deepdeep.sdk.ai.http (okhttpMain source set)
+// io.github.whywood.superpi.sdk.ai.http (okhttpMain source set)
 fun okHttpTransport(client: OkHttpClient = defaultClient()): HttpTransport
 
-// io.github.whywood.deepdeep.sdk.ai.utils
+// io.github.whywood.superpi.sdk.ai.utils
 object PartialJson {
     fun parse(text: String): JsonValue?              // incomplete input returns the parsed part/null
     fun repair(text: String): String
@@ -62,7 +62,7 @@ object ProviderErrors {
 ## task-5 (transcript/validation/estimation) exposure
 
 ```kotlin
-// io.github.whywood.deepdeep.sdk.ai.utils.Transcript (top-level functions avoid clashing with the class name)
+// io.github.whywood.superpi.sdk.ai.utils.Transcript (top-level functions avoid clashing with the class name)
 fun createInitialSystemMessage(systemPrompt: String?, tools: List<Tool>?): SystemMessage?
 fun normalizeContext(context: Context): TranscriptContext
 fun getInitialSystemMessage(messages: List<Message>): SystemMessage?
@@ -76,24 +76,24 @@ fun declarationsEqual(a: Tool, b: Tool): Boolean
 data class ToolStateChanges(val added: List<Tool>, val removed: List<ToolReference>)
 fun getToolStateChanges(previous: List<Tool>, current: List<Tool>): ToolStateChanges
 
-// io.github.whywood.deepdeep.sdk.ai.utils.Text
+// io.github.whywood.superpi.sdk.ai.utils.Text
 fun contentText(content: MessageContent, separator: String = "\n"): String
 fun getSystemMessageText(message: SystemMessage): String
 fun renderSystemMessageUpdate(message: SystemMessage): String
 
-// io.github.whywood.deepdeep.sdk.ai.utils.Validation
+// io.github.whywood.superpi.sdk.ai.utils.Validation
 class ToolArgumentValidationException(message: String) : Exception(message)
 fun validateToolArguments(tool: Tool, toolCall: ToolCall): JsonObject
 fun validateToolCall(tools: List<Tool>, toolCall: ToolCall): JsonObject
 
-// io.github.whywood.deepdeep.sdk.ai.utils.Estimate
+// io.github.whywood.superpi.sdk.ai.utils.Estimate
 fun calculateContextTokens(usage: Usage): Long
 fun estimateTextTokens(text: String): Long
 fun estimateMessageTokens(message: Message): Long
 data class ContextUsageEstimate(val tokens: Long, val usageTokens: Long, val trailingTokens: Long, val lastUsageIndex: Int)
 fun estimateContextTokens(messages: List<Message>): ContextUsageEstimate
 
-// io.github.whywood.deepdeep.sdk.ai.utils.Overflow
+// io.github.whywood.superpi.sdk.ai.utils.Overflow
 fun isContextOverflow(message: AssistantMessage, contextWindow: Long? = null): Boolean
 fun isRecoverableLength(message: AssistantMessage, desiredMaxOutput: Long): Boolean
 ```
@@ -103,7 +103,7 @@ Validator requirements: port upstream `utils/validation.ts`'s JSON Schema subset
 ## task-6 (openai-completions) exposure
 
 ```kotlin
-// io.github.whywood.deepdeep.sdk.ai.api
+// io.github.whywood.superpi.sdk.ai.api
 fun openAICompletionsApi(): ApiProvider
 // ApiProvider: val api: String; suspend fun stream(model, context: TranscriptContext, options: StreamOptions): AssistantMessageEventStream
 //              suspend fun streamSimple(model, context, options: SimpleStreamOptions): AssistantMessageEventStream
@@ -114,7 +114,7 @@ Port the parts of `src/api/openai-completions.ts` + `src/api/transform-messages.
 ## task-7 (Models/Provider/auth/faux) exposure
 
 ```kotlin
-// io.github.whywood.deepdeep.sdk.ai
+// io.github.whywood.superpi.sdk.ai
 interface ApiFactory { fun create(): ApiProvider }
 
 class Provider(
@@ -147,7 +147,7 @@ fun calculateCost(model: AnyModel, usage: Usage): UsageCost
 fun getSupportedThinkingLevels(model: Model): List<ModelThinkingLevel>
 fun clampThinkingLevel(model: Model, level: ModelThinkingLevel): ModelThinkingLevel
 
-// io.github.whywood.deepdeep.sdk.ai.auth
+// io.github.whywood.superpi.sdk.ai.auth
 sealed interface AuthResolver { suspend fun resolve(overrides: AuthOverrides? = null): ResolvedAuth? }
 data class ResolvedAuth(val apiKey: String?, val headers: Map<String, String> = emptyMap(), val source: String)
 class EnvApiKeyAuth(val label: String, val envVars: List<String>, val inlineKey: String? = null) : AuthResolver
@@ -161,7 +161,7 @@ faux provider (`providers/Faux.kt`): ports the scripted responses/streaming even
 
 ## task-8 (pi-agent) exposure
 
-Implement `io.github.whywood.deepdeep.sdk.agent` per `docs/analysis/pi-agent.md`: `AgentMessage`/`AgentTool`/`AgentEvent`/`AgentContext`/`AgentState`/`AgentOptions`/`AgentLoopConfig`/`StreamFn`/`Agent`/`runAgentLoop`/`runAgentLoopContinue`/proxy. `StreamFn` is defined as:
+Implement `io.github.whywood.superpi.sdk.agent` per `docs/analysis/pi-agent.md`: `AgentMessage`/`AgentTool`/`AgentEvent`/`AgentContext`/`AgentState`/`AgentOptions`/`AgentLoopConfig`/`StreamFn`/`Agent`/`runAgentLoop`/`runAgentLoopContinue`/proxy. `StreamFn` is defined as:
 
 ```kotlin
 typealias StreamFn = suspend (model: Model, context: TranscriptContext, options: SimpleStreamOptions?) -> AssistantMessageEventStream
@@ -175,5 +175,5 @@ pi-agent depends only on pi-ai's public types and the frozen functions in `utils
 - Read the corresponding `docs/analysis/` sections first (they carry line-by-line evidence), then the upstream TS implementation.
 - File write scope follows the task declaration strictly; do not modify `build.gradle.kts`, `gradle/libs.versions.toml`, or `docs/` (unless the task says so).
 - Tests: `./gradlew :pi-ai:jvmTest` (fast JVM-only tests); make sure `:pi-ai:allTests` is green before committing.
-- Naming: packages `io.github.whywood.deepdeep.sdk.ai` / `io.github.whywood.deepdeep.sdk.agent` / `io.github.whywood.deepdeep.sdk.coding`; no `I` prefix on interfaces.
+- Naming: packages `io.github.whywood.superpi.sdk.ai` / `io.github.whywood.superpi.sdk.agent` / `io.github.whywood.superpi.sdk.coding`; no `I` prefix on interfaces.
 - When done, complete the task and message the lead: file list, test results, deviations from the contract, and open items.

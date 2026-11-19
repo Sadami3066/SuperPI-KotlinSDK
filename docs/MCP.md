@@ -23,9 +23,9 @@ pi2kotlin has shipped an embedded MCP (Model Context Protocol) client since 0.2.
 ## Quick start
 
 ```kotlin
-import io.github.whywood.deepdeep.sdk.coding.mcp.McpOptions
-import io.github.whywood.deepdeep.sdk.mcp.config.McpExposure
-import io.github.whywood.deepdeep.sdk.mcp.config.McpServerConfig
+import io.github.whywood.superpi.sdk.coding.mcp.McpOptions
+import io.github.whywood.superpi.sdk.mcp.config.McpExposure
+import io.github.whywood.superpi.sdk.mcp.config.McpServerConfig
 
 val session = createAgentSession(
     AgentSessionOptions(
@@ -144,7 +144,7 @@ val result = session.mcp.signIn(
 
 - Tokens persist to `<agentDir>/mcp-auth.json` (atomic write, 0600).
 - Automatic refresh (30 seconds early), one retry on 401, and step-up on 403 `insufficient_scope`.
-- On JVM, `io.github.whywood.deepdeep.sdk.mcp.oauth.LoopbackCallbackServer` provides a local callback; on Android the host supplies the browser callback (see `examples/android-demo`).
+- On JVM, `io.github.whywood.superpi.sdk.mcp.oauth.LoopbackCallbackServer` provides a local callback; on Android the host supplies the browser callback (see `examples/android-demo`).
 - `auth.provider` (reusing an SDK provider token you are already signed in with) currently **only parses the config and is not wired up**; do not rely on it.
 
 ## roots / sampling / elicitation

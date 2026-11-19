@@ -14,5 +14,5 @@ dependencies {
 }
 
 application {
-    mainClass.set("io.github.whywood.deepdeep.sdk.demo.MainKt")
+    mainClass.set("io.github.whywood.superpi.sdk.demo.MainKt")
 }
