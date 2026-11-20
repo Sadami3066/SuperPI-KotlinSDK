@@ -18,6 +18,7 @@ import io.github.whywood.superpi.sdk.ai.ToolCall
 import io.github.whywood.superpi.sdk.ai.ToolResultMessage
 import io.github.whywood.superpi.sdk.ai.TranscriptContext
 import io.github.whywood.superpi.sdk.ai.Usage
+import kotlin.concurrent.Volatile
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 
@@ -281,15 +282,19 @@ class AgentState internal constructor(
             messagesValue = value.toMutableList()
         }
 
+    @Volatile
     var isStreaming: Boolean = false
         internal set
 
+    @Volatile
     var streamingMessage: AgentMessage? = null
         internal set
 
+    @Volatile
     var pendingToolCalls: Set<String> = emptySet()
         internal set
 
+    @Volatile
     var errorMessage: String? = null
         internal set
 

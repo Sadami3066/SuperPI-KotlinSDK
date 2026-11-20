@@ -1,5 +1,6 @@
 package io.github.whywood.superpi.sdk.agent
 
+import io.github.whywood.superpi.sdk.ai.platform.PlatformAtomicBoolean
 import io.github.whywood.superpi.sdk.ai.platform.platformCurrentTimeMillis
 import io.github.whywood.superpi.sdk.ai.AssistantMessage
 import io.github.whywood.superpi.sdk.ai.AssistantMessageEvent
@@ -39,6 +40,8 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlin.time.TimeSource
 
 typealias AgentEventSink = suspend (event: AgentEvent) -> Unit
@@ -155,9 +158,11 @@ private suspend fun runLoop(
     newMessages: MutableList<AgentMessage>,
     initialConfig: AgentLoopConfig,
     signal: RunSignal?,
-    emit: AgentEventSink,
+    rawEmit: AgentEventSink,
     streamFunction: StreamFn,
 ) {
+    val emitMutex = Mutex()
+    val emit: AgentEventSink = { event -> emitMutex.withLock { rawEmit(event) } }
     var currentContext = initialContext
     var config = initialConfig.snapshot()
     var lastCompletedTurn: AgentTurnContext? = null
@@ -634,22 +639,22 @@ private suspend fun executePreparedToolCall(
     onUpdate: AgentToolUpdateCallback?,
 ): ExecutedToolCall {
     val startedAt = TimeSource.Monotonic.markNow()
-    var acceptingUpdates = true
+    val acceptingUpdates = PlatformAtomicBoolean(true)
     fun elapsed(): Long = (startedAt.elapsedNow().inWholeMicroseconds / 1000.0).toLong()
     try {
         val result = prepared.tool.execute(prepared.toolCall.id, prepared.args, signal) { partialResult ->
-            if (acceptingUpdates) {
+            if (acceptingUpdates.get()) {
                 onUpdate?.invoke(partialResult)
             }
         }
         val durationMs = elapsed()
-        acceptingUpdates = false
         return ExecutedToolCall(result, result.isError == true, durationMs)
     } catch (error: Throwable) {
         if (error is CancellationException) throw error
         val durationMs = elapsed()
-        acceptingUpdates = false
         return ExecutedToolCall(createErrorToolResult(error.message ?: error.toString()), true, durationMs)
+    } finally {
+        acceptingUpdates.set(false)
     }
 }
 

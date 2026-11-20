@@ -23,8 +23,11 @@ import io.github.whywood.superpi.sdk.ai.UserMessage
 import io.github.whywood.superpi.sdk.ai.utils.createInitialSystemMessage
 import io.github.whywood.superpi.sdk.ai.utils.getCurrentSystemMessage
 import io.github.whywood.superpi.sdk.ai.utils.toToolDeclaration
+import kotlin.concurrent.Volatile
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 typealias AgentListener = suspend (event: AgentEvent, signal: RunSignal) -> Unit
 
@@ -37,12 +40,19 @@ private val defaultConvertToLlm: ConvertToLlm = { messages ->
 class Agent(options: AgentOptions = AgentOptions()) {
     private val stateValue: AgentState = createAgentState(options.initialState)
 
+    private val stateLock = Any()
+
+    private val listenersLock = Any()
+
+    private val eventMutex = Mutex()
+
     private val listeners = LinkedHashSet<AgentListener>()
 
     private val steeringQueue = PendingMessageQueue(options.steeringMode ?: QueueMode.OneAtATime)
 
     private val followUpQueue = PendingMessageQueue(options.followUpMode ?: QueueMode.OneAtATime)
 
+    @Volatile
     private var activeRun: ActiveRun? = null
 
     var convertToLlm: ConvertToLlm = options.convertToLlm ?: defaultConvertToLlm
@@ -86,7 +96,7 @@ class Agent(options: AgentOptions = AgentOptions()) {
     var identity: ClientIdentity? = options.identity
 
     var getActiveTools: (suspend () -> List<AgentTool>)? =
-        options.getActiveTools ?: { stateValue.tools.toList() }
+        options.getActiveTools ?: { synchronized(stateLock) { stateValue.tools.toList() } }
 
     val state: AgentState get() = stateValue
 
@@ -105,8 +115,8 @@ class Agent(options: AgentOptions = AgentOptions()) {
     val signal: RunSignal? get() = activeRun?.signal
 
     fun subscribe(listener: AgentListener): () -> Unit {
-        listeners.add(listener)
-        return { listeners.remove(listener) }
+        synchronized(listenersLock) { listeners.add(listener) }
+        return { synchronized(listenersLock) { listeners.remove(listener) } }
     }
 
     fun steer(message: AgentMessage) {
@@ -150,21 +160,23 @@ class Agent(options: AgentOptions = AgentOptions()) {
     }
 
     fun reset() {
-        if (activeRun != null) {
-            throw IllegalStateException("Agent is already processing. Wait for completion before resetting.")
+        synchronized(stateLock) {
+            if (activeRun != null) {
+                throw IllegalStateException("Agent is already processing. Wait for completion before resetting.")
+            }
+            val baseline = getCurrentSystemMessage(stateValue.messages.mapNotNull { it.asLlmMessage() })
+            stateValue.messages = if (baseline != null) {
+                mutableListOf<AgentMessage>(StandardAgentMessage(baseline))
+            } else {
+                mutableListOf<AgentMessage>()
+            }
+            stateValue.isStreaming = false
+            stateValue.streamingMessage = null
+            stateValue.pendingToolCalls = emptySet()
+            stateValue.errorMessage = null
+            clearFollowUpQueue()
+            clearSteeringQueue()
         }
-        val baseline = getCurrentSystemMessage(stateValue.messages.mapNotNull { it.asLlmMessage() })
-        stateValue.messages = if (baseline != null) {
-            mutableListOf<AgentMessage>(StandardAgentMessage(baseline))
-        } else {
-            mutableListOf<AgentMessage>()
-        }
-        stateValue.isStreaming = false
-        stateValue.streamingMessage = null
-        stateValue.pendingToolCalls = emptySet()
-        stateValue.errorMessage = null
-        clearFollowUpQueue()
-        clearSteeringQueue()
     }
 
     suspend fun prompt(message: AgentMessage) {
@@ -180,35 +192,51 @@ class Agent(options: AgentOptions = AgentOptions()) {
     }
 
     suspend fun continueRun() {
-        if (activeRun != null) {
-            throw IllegalStateException("Agent is already processing. Wait for completion before continuing.")
-        }
-        val messages = stateValue.messages
-        val lastMessage = messages.lastOrNull()
-        if (lastMessage == null || messages.all { it.role == "system" }) {
-            throw IllegalStateException("No messages to continue from")
-        }
-        if (lastMessage.role == "assistant") {
-            val queuedSteering = steeringQueue.drain()
-            if (queuedSteering.isNotEmpty()) {
-                runPromptMessages(queuedSteering, skipInitialSteeringPoll = true)
-                return
+        val (run, continuation) = synchronized(stateLock) {
+            if (activeRun != null) {
+                throw IllegalStateException("Agent is already processing. Wait for completion before continuing.")
             }
-            val queuedFollowUps = followUpQueue.drain()
-            if (queuedFollowUps.isNotEmpty()) {
-                runPromptMessages(queuedFollowUps)
-                return
+            val messages = stateValue.messages
+            val lastMessage = messages.lastOrNull()
+            if (lastMessage == null || messages.all { it.role == "system" }) {
+                throw IllegalStateException("No messages to continue from")
             }
-            throw IllegalStateException("Cannot continue from message role: assistant")
+            val plan = if (lastMessage.role == "assistant") {
+                val queuedSteering = steeringQueue.drain()
+                if (queuedSteering.isNotEmpty()) {
+                    ContinuePlan.Prompt(queuedSteering, skipInitialSteeringPoll = true)
+                } else {
+                    val queuedFollowUps = followUpQueue.drain()
+                    if (queuedFollowUps.isNotEmpty()) {
+                        ContinuePlan.Prompt(queuedFollowUps, skipInitialSteeringPoll = false)
+                    } else {
+                        throw IllegalStateException("Cannot continue from message role: assistant")
+                    }
+                }
+            } else {
+                ContinuePlan.Continue
+            }
+            Pair(claimActiveRunLocked(), plan)
         }
-        runWithLifecycle { signal ->
-            runAgentLoopContinue(
-                createContextSnapshot(),
-                createLoopConfig(),
-                { event -> processEvents(event) },
-                signal,
-                streamFunction,
-            )
+        executeClaimedRun(run) { signal ->
+            when (continuation) {
+                is ContinuePlan.Prompt -> runAgentLoop(
+                    continuation.messages,
+                    createContextSnapshot(),
+                    createLoopConfig(continuation.skipInitialSteeringPoll),
+                    { event -> processEvents(event) },
+                    signal,
+                    streamFunction,
+                )
+
+                ContinuePlan.Continue -> runAgentLoopContinue(
+                    createContextSnapshot(),
+                    createLoopConfig(),
+                    { event -> processEvents(event) },
+                    signal,
+                    streamFunction,
+                )
+            }
         }
     }
 
@@ -221,16 +249,10 @@ class Agent(options: AgentOptions = AgentOptions()) {
     }
 
     private suspend fun promptMessages(messages: List<AgentMessage>, skipInitialSteeringPoll: Boolean = false) {
-        if (activeRun != null) {
-            throw IllegalStateException(
-                "Agent is already processing a prompt. Use steer() or followUp() to queue messages, or wait for completion.",
-            )
-        }
-        runPromptMessages(messages, skipInitialSteeringPoll)
-    }
-
-    private suspend fun runPromptMessages(messages: List<AgentMessage>, skipInitialSteeringPoll: Boolean = false) {
-        runWithLifecycle { signal ->
+        val run = claimRun(
+            "Agent is already processing a prompt. Use steer() or followUp() to queue messages, or wait for completion.",
+        )
+        executeClaimedRun(run) { signal ->
             runAgentLoop(
                 messages,
                 createContextSnapshot(),
@@ -242,10 +264,12 @@ class Agent(options: AgentOptions = AgentOptions()) {
         }
     }
 
-    private fun createContextSnapshot(): AgentContext = AgentContext(
-        messages = stateValue.messages.toList(),
-        tools = stateValue.tools.toList(),
-    )
+    private fun createContextSnapshot(): AgentContext = synchronized(stateLock) {
+        AgentContext(
+            messages = stateValue.messages.toList(),
+            tools = stateValue.tools.toList(),
+        )
+    }
 
     private fun createLoopConfig(skipInitialSteeringPoll: Boolean = false): AgentLoopConfig {
         var skipSteeringPoll = skipInitialSteeringPoll
@@ -299,25 +323,32 @@ class Agent(options: AgentOptions = AgentOptions()) {
         )
     }
 
-    private suspend fun runWithLifecycle(executor: suspend (RunSignal) -> Unit) {
+    private fun claimRun(busyMessage: String): ActiveRun = synchronized(stateLock) {
         if (activeRun != null) {
-            throw IllegalStateException("Agent is already processing.")
+            throw IllegalStateException(busyMessage)
         }
-        val runSignal = RunSignal()
-        val deferred = CompletableDeferred<Unit>()
-        activeRun = ActiveRun(deferred, runSignal)
+        claimActiveRunLocked()
+    }
+
+    private fun claimActiveRunLocked(): ActiveRun {
+        val run = ActiveRun(CompletableDeferred(), RunSignal())
+        activeRun = run
         stateValue.isStreaming = true
         stateValue.streamingMessage = null
         stateValue.errorMessage = null
+        return run
+    }
+
+    private suspend fun executeClaimedRun(run: ActiveRun, executor: suspend (RunSignal) -> Unit) {
         try {
-            executor(runSignal)
+            executor(run.signal)
         } catch (cancellation: CancellationException) {
-            runSignal.abort()
+            run.signal.abort()
             throw cancellation
         } catch (error: Throwable) {
-            handleRunFailure(error, runSignal.isAborted)
+            handleRunFailure(error, run.signal.isAborted)
         } finally {
-            finishRun()
+            finishRun(run)
         }
     }
 
@@ -340,15 +371,34 @@ class Agent(options: AgentOptions = AgentOptions()) {
         processEvents(AgentEvent.AgentEnd(listOf(agentMessage)))
     }
 
-    private fun finishRun() {
-        stateValue.isStreaming = false
-        stateValue.streamingMessage = null
-        stateValue.pendingToolCalls = emptySet()
-        activeRun?.deferred?.complete(Unit)
-        activeRun = null
+    private fun finishRun(run: ActiveRun) {
+        synchronized(stateLock) {
+            stateValue.isStreaming = false
+            stateValue.streamingMessage = null
+            stateValue.pendingToolCalls = emptySet()
+            if (activeRun === run) {
+                activeRun = null
+            }
+        }
+        run.deferred.complete(Unit)
     }
 
     private suspend fun processEvents(event: AgentEvent) {
+        eventMutex.withLock {
+            val activeSignal = synchronized(stateLock) {
+                val signal = activeRun?.signal
+                    ?: throw IllegalStateException("Agent listener invoked outside active run")
+                applyEventToState(event)
+                signal
+            }
+            val snapshot = synchronized(listenersLock) { listeners.toList() }
+            for (listener in snapshot) {
+                listener(event, activeSignal)
+            }
+        }
+    }
+
+    private fun applyEventToState(event: AgentEvent) {
         when (event) {
             is AgentEvent.MessageStart -> stateValue.streamingMessage = event.message
             is AgentEvent.MessageUpdate -> stateValue.streamingMessage = event.message
@@ -376,11 +426,15 @@ class Agent(options: AgentOptions = AgentOptions()) {
 
             else -> Unit
         }
-        val activeSignal = activeRun?.signal
-            ?: throw IllegalStateException("Agent listener invoked outside active run")
-        for (listener in listeners.toList()) {
-            listener(event, activeSignal)
-        }
+    }
+
+    private sealed interface ContinuePlan {
+        class Prompt(
+            val messages: List<AgentMessage>,
+            val skipInitialSteeringPoll: Boolean,
+        ) : ContinuePlan
+
+        data object Continue : ContinuePlan
     }
 
     private class ActiveRun(
@@ -388,7 +442,7 @@ class Agent(options: AgentOptions = AgentOptions()) {
         val signal: RunSignal,
     )
 
-    internal class PendingMessageQueue(var mode: QueueMode) {
+    internal class PendingMessageQueue(@Volatile var mode: QueueMode) {
         private val messages = ArrayDeque<AgentMessage>()
 
         fun enqueue(message: AgentMessage) {
