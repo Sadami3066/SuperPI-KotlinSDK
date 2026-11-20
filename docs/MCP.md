@@ -1,6 +1,6 @@
 # MCP integration guide
 
-pi2kotlin has shipped an embedded MCP (Model Context Protocol) client since 0.2.0; 0.2.1 added sampling / elicitation / roots, bringing third-party MCP server tools, resources, and prompts into agent sessions.
+SuperPI-KotlinSDK (formerly `pi2kotlin`) has shipped an embedded MCP (Model Context Protocol) client since 0.2.0; 0.2.1 added sampling / elicitation / roots, bringing third-party MCP server tools, resources, and prompts into agent sessions.
 
 ## Supported scope
 

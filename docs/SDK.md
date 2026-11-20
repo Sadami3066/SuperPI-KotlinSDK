@@ -1,4 +1,4 @@
-# pi2kotlin SDK guide
+# SuperPI-KotlinSDK guide
 
 A coding agent SDK for Android / JVM apps: pi's (TypeScript) `pi-ai`, `pi-agent`, and `pi-coding-agent` rewritten as a Kotlin Multiplatform library.
 

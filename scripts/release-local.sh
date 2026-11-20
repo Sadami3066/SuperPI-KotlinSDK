@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-VERSION="${1:-0.2.1}"
+VERSION="${1:-0.7.0}"
 MANIFEST="$ROOT/build/release-manifest.txt"
 
 cd "$ROOT"
@@ -28,8 +28,8 @@ mkdir -p "$ROOT/build"
   echo "generated=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   for module in pi-ai pi-agent pi-mcp pi-coding-agent; do
     for artifact in \
-      "$HOME/.m2/repository/dev/pi/$module-jvm/$VERSION/$module-jvm-$VERSION.jar" \
-      "$HOME/.m2/repository/dev/pi/$module-android/$VERSION/$module-android-$VERSION.aar"; do
+      "$HOME/.m2/repository/io/github/whywood/superpi/sdk/$module-jvm/$VERSION/$module-jvm-$VERSION.jar" \
+      "$HOME/.m2/repository/io/github/whywood/superpi/sdk/$module-android/$VERSION/$module-android-$VERSION.aar"; do
       if [ -f "$artifact" ]; then
         echo "$(sha256sum "$artifact")"
       fi

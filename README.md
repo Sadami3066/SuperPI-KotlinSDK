@@ -1,6 +1,6 @@
-# pi2kotlin
+# SuperPI-KotlinSDK
 
-[![CI](https://github.com/Sadami3066/pi2kotlin/actions/workflows/ci.yml/badge.svg)](https://github.com/Sadami3066/pi2kotlin/actions/workflows/ci.yml)
+[![CI](https://github.com/Sadami3066/SuperPI-KotlinSDK/actions/workflows/ci.yml/badge.svg)](https://github.com/Sadami3066/SuperPI-KotlinSDK/actions/workflows/ci.yml)
 
 A Kotlin Multiplatform SDK for building AI agent apps on **Android and the JVM**, rewritten from [pi](https://pi.dev) (`pi-ai`, `pi-agent`, and the SDK layer of `pi-coding-agent`).
 
@@ -48,7 +48,7 @@ implementation("com.github.Sadami3066.SuperPI-KotlinSDK:pi-coding-agent-android:
 
 JitPack builds the tagged commit on first request, so the first resolve can take a few minutes; later requests reuse the cached build. `pi-ai`, `pi-agent` and `pi-mcp` are published under the same group and tag.
 
-**Prebuilt artifacts**: download the latest `pi2kotlin-*-m2.zip` from [GitHub Releases](https://github.com/Sadami3066/pi2kotlin/releases), unzip it, and point the dependency repository at the unzipped directory:
+**Prebuilt artifacts**: download the latest `superpi-kotlin-sdk-*-m2.zip` (or legacy `pi2kotlin-*-m2.zip`) from [GitHub Releases](https://github.com/Sadami3066/SuperPI-KotlinSDK/releases), unzip it, and point the dependency repository at the unzipped directory:
 
 ```kotlin
 repositories {

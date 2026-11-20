@@ -1,6 +1,6 @@
-# pi2kotlin
+# SuperPI-KotlinSDK
 
-[![CI](https://github.com/Sadami3066/pi2kotlin/actions/workflows/ci.yml/badge.svg)](https://github.com/Sadami3066/pi2kotlin/actions/workflows/ci.yml)
+[![CI](https://github.com/Sadami3066/SuperPI-KotlinSDK/actions/workflows/ci.yml/badge.svg)](https://github.com/Sadami3066/SuperPI-KotlinSDK/actions/workflows/ci.yml)
 
 把 [pi](https://pi.dev)（`pi-ai`、`pi-agent`、`pi coding agent` 的 SDK 层）用 Kotlin 重写，产出一个用于构建 **Android / JVM AI agent 应用**的 Kotlin Multiplatform SDK。
 
@@ -48,7 +48,7 @@ implementation("com.github.Sadami3066.SuperPI-KotlinSDK:pi-coding-agent-android:
 
 JitPack 首次被请求某个 tag 时现场构建，第一次解析可能较慢；之后复用缓存。`pi-ai`、`pi-agent`、`pi-mcp` 用同一个 group 与 tag。
 
-**直接下载产物**：从 [GitHub Releases](https://github.com/Sadami3066/pi2kotlin/releases) 下载最新的 `pi2kotlin-*-m2.zip`，解压后把 repository 指向解压目录：
+**直接下载产物**：从 [GitHub Releases](https://github.com/Sadami3066/SuperPI-KotlinSDK/releases) 下载最新的 `superpi-kotlin-sdk-*-m2.zip`（或旧版 `pi2kotlin-*-m2.zip`），解压后把 repository 指向解压目录：
 
 ```kotlin
 repositories {

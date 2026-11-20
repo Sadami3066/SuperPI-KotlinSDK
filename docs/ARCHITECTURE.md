@@ -2,7 +2,7 @@
 
 ## Positioning
 
-pi2kotlin is a Kotlin Multiplatform SDK for building **mobile agent apps**: it rewrites pi's `pi-ai`, `pi-agent`, and `pi-coding-agent` (core/SDK layer) as Kotlin libraries, with no CLI/TUI.
+SuperPI-KotlinSDK (formerly `pi2kotlin`) is a Kotlin Multiplatform SDK for building **mobile agent apps**: it rewrites pi's `pi-ai`, `pi-agent`, and `pi-coding-agent` (core/SDK layer) as Kotlin libraries, with no CLI/TUI.
 
 ## Technology choices
 
