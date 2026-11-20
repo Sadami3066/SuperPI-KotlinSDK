@@ -4,7 +4,7 @@
 
 A Kotlin Multiplatform SDK for building AI agent apps on **Android and the JVM**, rewritten from [pi](https://pi.dev) (`pi-ai`, `pi-agent`, and the SDK layer of `pi-coding-agent`).
 
-[中文文档](README.zh-CN.md)
+[中文文档](README.cn.md)
 
 Status: **0.7.0**. The library builds, ships Android AARs and JVM JARs, and is covered by 1,000+ JVM tests plus Android host tests. API shape may still change before 1.0.
 
