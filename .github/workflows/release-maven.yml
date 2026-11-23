@@ -1,0 +1,112 @@
+name: Release · Publish to Maven
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag (e.g. v0.7.0, must match version in build.gradle.kts)
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Resolve version
+        id: meta
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          TAG="${INPUT_TAG:-$GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.meta.outputs.tag }}
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install Android SDK 36
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          if [ ! -d "$SDK_ROOT/platforms/android-36" ] || [ ! -d "$SDK_ROOT/build-tools/36.0.0" ]; then
+            SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -name sdkmanager -type f | head -n 1)"
+            test -n "$SDKMANAGER"
+            yes | "$SDKMANAGER" --licenses > /dev/null || true
+            "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
+          fi
+
+      - name: Verify version matches build.gradle.kts
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          grep -q "getOrElse(\"${VERSION}\")" build.gradle.kts || grep -q "version = \"${VERSION}\"" build.gradle.kts
+
+      - name: Clean build, publish local & staging Maven repo, verify bytecode
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          ./gradlew clean build publishToMavenLocal publishAllPublicationsToPagesRepository "-PsdkVersion=${VERSION}" --no-daemon --max-workers=2
+          node scripts/verify-release.mjs "${VERSION}"
+
+      - name: Checkout SuperPI-Maven
+        uses: actions/checkout@v7
+        with:
+          repository: Sadami3066/SuperPI-Maven
+          path: maven-repo
+          ssh-key: ${{ secrets.MAVEN_DEPLOY_KEY }}
+          persist-credentials: true
+
+      - name: Sync artifacts to SuperPI-Maven
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          cp -r build/maven-repo/io/. maven-repo/io/
+          cd maven-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add io/
+          if git diff --cached --quiet; then
+            echo "No Maven changes to commit."
+            exit 0
+          fi
+          git commit -m "chore(maven): publish pi2kotlin SDK ${VERSION}"
+          git push origin main
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ steps.meta.outputs.tag }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/dist"
+          {
+            echo "version=${VERSION}"
+            for module in pi-ai pi-agent pi-mcp pi-coding-agent; do
+              for ext in jar aar; do
+                f=$(find build/maven-repo/io/github/whywood/superpi/sdk -name "${module}-*-${VERSION}.${ext}" | head -n 1)
+                if [ -n "$f" ]; then sha256sum "$f"; fi
+              done
+            done
+          } > "$RUNNER_TEMP/dist/SHA256SUMS.txt"
+          gh release create "$TAG_NAME" "$RUNNER_TEMP/dist/SHA256SUMS.txt" \
+            --title "$TAG_NAME" \
+            --generate-notes
