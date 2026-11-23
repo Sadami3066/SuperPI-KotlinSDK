@@ -1,81 +1,66 @@
-# SuperPI-KotlinSDK
+<div align="center">
+
+# SuperPI Kotlin SDK
+
+**Kotlin Multiplatform SDK for AI Agent Apps on Android & JVM**
+
+<sub>Clean-room Kotlin Multiplatform port of [pi](https://pi.dev) (`pi-ai`, `pi-agent`, `pi-mcp`, `pi-coding-agent`) powering [SuperPI](https://github.com/Sadami3066/SuperPI).</sub>
+
+English · [简体中文](README.cn.md)
 
 [![CI](https://github.com/Sadami3066/SuperPI-KotlinSDK/actions/workflows/ci.yml/badge.svg)](https://github.com/Sadami3066/SuperPI-KotlinSDK/actions/workflows/ci.yml)
+<img src="https://img.shields.io/badge/Version-0.7.0-111111?style=flat-square" alt="Version 0.7.0" />
+<img src="https://img.shields.io/badge/Kotlin-2.4.21-7F52FF?style=flat-square&logo=kotlin&logoColor=white" alt="Kotlin 2.4.21" />
+<img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" alt="MIT" />
 
-A Kotlin Multiplatform SDK for building AI agent apps on **Android and the JVM**, rewritten from [pi](https://pi.dev) (`pi-ai`, `pi-agent`, and the SDK layer of `pi-coding-agent`).
+</div>
 
-[中文文档](README.cn.md)
-
-Status: **0.7.0**. The library builds, ships Android AARs and JVM JARs, and is covered by 1,000+ JVM tests plus Android host tests. API shape may still change before 1.0.
+---
 
 ## Modules
 
-| Module | Ports | What it does |
-|---|---|---|
-| `pi-ai` | `packages/ai` | Unified LLM API: 10 chat APIs, image generation and classifier APIs, 42 built-in providers, model catalog, auth (API key + 9 OAuth flows), streaming events, retries, usage/cost |
-| `pi-agent` | `packages/agent` | Agent runtime: event lifecycle, tool execution (serial and parallel), hooks, steering/follow-up queues, proxy transport |
-| `pi-mcp` | `packages/mcp` (subset) | MCP client: Streamable HTTP + stdio (JVM), tools/resources/prompts, OAuth 2.1, deferred tools via `tool_search` |
-| `pi-coding-agent` | `packages/coding-agent` (core/SDK layer) | Sessions (pi-compatible JSONL), settings, model resolution, built-in tools, system prompt and resources, compaction, prompt/tool-result image normalization to model `inputLimits`, request-level image budgeting for long sessions, and the `AgentSession` / `createAgentSession` facade |
-
 Dependency direction: `pi-coding-agent` → `pi-agent` → `pi-ai`, and `pi-coding-agent` → `pi-mcp` → `pi-ai`.
+
+| Module | Scope | Highlights |
+|---|---|---|
+| `pi-ai` | LLM Transport & Catalog | 10 chat APIs, image generation/classifier, 42 built-in providers, 9 OAuth flows, streaming, retries, usage/cost |
+| `pi-agent` | Agent Runtime | Stateful loop, serial/parallel tool execution, steering & follow-up queues, hooks, proxy transport |
+| `pi-mcp` | MCP Client | Streamable HTTP + JVM stdio, deferred tools via `tool_search`, resources, prompts, OAuth 2.1 |
+| `pi-coding-agent` | Coding & Session Facade | pi-compatible JSONL sessions, settings, compaction, image budgeting, `AgentSession` / `createAgentSession` |
 
 ## Requirements
 
-- JDK 17 or newer (published JVM artifacts target Java 17)
-- Android `minSdk 26` and `compileSdk 36` when used on Android
-- Gradle 9.8.2 (wrapper included) and Kotlin 2.4.21 for building from source
+- JDK 17+ (`jvmToolchain(17)`)
+- Android `minSdk 26`, `compileSdk 36`, `android.useAndroidX=true`
 
 ## Installation
 
-Artifacts are not on Maven Central yet. Three options:
-
-**JitPack**: add the repository and use the Git tag as the version (`v0.7.0`):
+Artifacts are published automatically on `vX.Y.Z` tags to [`SuperPI-Maven`](https://github.com/Sadami3066/SuperPI-Maven):
 
 ```kotlin
 // settings.gradle.kts
-repositories {
-    maven("https://jitpack.io")
+dependencyResolutionManagement {
+    repositories {
+        maven("https://sadami3066.github.io/SuperPI-Maven") {
+            content { includeGroup("io.github.whywood.superpi.sdk") }
+        }
+        google()
+        mavenCentral()
+    }
 }
 ```
 
 ```kotlin
-// JVM
-implementation("com.github.Sadami3066.SuperPI-KotlinSDK:pi-coding-agent:v0.7.0")
-
-// Android
-implementation("com.github.Sadami3066.SuperPI-KotlinSDK:pi-coding-agent-android:v0.7.0")
-```
-
-JitPack builds the tagged commit on first request, so the first resolve can take a few minutes; later requests reuse the cached build. `pi-ai`, `pi-agent` and `pi-mcp` are published under the same group and tag.
-
-**Prebuilt artifacts**: download the latest `superpi-kotlin-sdk-*-m2.zip` (or legacy `pi2kotlin-*-m2.zip`) from [GitHub Releases](https://github.com/Sadami3066/SuperPI-KotlinSDK/releases), unzip it, and point the dependency repository at the unzipped directory:
-
-```kotlin
-repositories {
-    maven { url = uri("path/to/unzipped") }
-    mavenCentral()
-}
-```
-
-**Build from source**:
-
-```bash
-./gradlew publishToMavenLocal
-```
-
-Then depend on the variant you need:
-
-```kotlin
-// JVM
-implementation("io.github.whywood.superpi.sdk:pi-coding-agent:0.7.0")
-
-// Android
+// build.gradle.kts (Android)
 implementation("io.github.whywood.superpi.sdk:pi-coding-agent-android:0.7.0")
+
+// build.gradle.kts (JVM)
+implementation("io.github.whywood.superpi.sdk:pi-coding-agent-jvm:0.7.0")
 ```
 
-Android apps also need `android.useAndroidX=true`.
+To link against a local sibling checkout from [`SuperPI`](https://github.com/Sadami3066/SuperPI), pass `-Psuperpi.localSdk=true` (Gradle composite build) or run `./gradlew publishToMavenLocal`.
 
-## Quick start
+## 5-Minute Quick Start
 
 ```kotlin
 import io.github.whywood.superpi.sdk.ai.TextDeltaEvent
@@ -84,119 +69,43 @@ import io.github.whywood.superpi.sdk.agent.AgentEvent
 import io.github.whywood.superpi.sdk.coding.AgentSessionOptions
 import io.github.whywood.superpi.sdk.coding.createAgentSession
 import io.github.whywood.superpi.sdk.coding.session.SessionEvent
-import okio.Path.Companion.toPath
 
 val session = createAgentSession(
     AgentSessionOptions(
         cwd = workspaceDir,
-        agentDir = appPrivateDir.resolve("agent").absolutePath.toPath(),
+        agentDir = agentDir,
         transport = okHttpTransport(),
         model = "deepseek/deepseek-v4-flash",
     ),
 )
 
-val subscription = session.subscribe { event ->
+val unsubscribe = session.subscribe { event ->
     if (event is SessionEvent.AgentEventReceived) {
-        val agentEvent = event.event
-        if (agentEvent is AgentEvent.MessageUpdate) {
-            val update = agentEvent.assistantMessageEvent
-            if (update is TextDeltaEvent) print(update.delta)
-        }
+        val update = (event.event as? AgentEvent.MessageUpdate)?.assistantMessageEvent
+        if (update is TextDeltaEvent) print(update.delta)
     }
 }
 
 session.prompt("Summarize the files in this directory")
-println(session.getLastAssistantText())
-subscription()
+unsubscribe()
 session.close()
 ```
 
-`createAgentSession` resolves settings, credentials, the model catalog, and resources (context files, skills, prompt templates) from `cwd` and `agentDir`.
-
-## Sessions
-
-- Conversations are persisted as pi-compatible JSONL (the same format as `~/.pi/agent/sessions`), including system prompt snapshots and compaction entries.
-- `sessionFile` can be passed to resume; `session.prompt()` resumes with the restored transcript.
-- `AgentSessionRuntime` adds `newSession()`, `switchSession()`, and `fork()` (fork can summarize the abandoned branch).
-- Store the agent directory in app-private storage on Android.
-
-## Models and providers
-
-- Built in: 42 providers and 1,714 catalog models (chat, image, classifier), 10 chat APIs, and 9 OAuth flows (Anthropic, OpenAI ChatGPT, GitHub Copilot, OpenAI Codex, xAI, OpenRouter, Kimi, Meta, Radius).
-- API keys are read from `<agentDir>/auth.json` (pi-compatible), a custom `CredentialStore`, or environment variables.
-- Custom providers can be configured in `<agentDir>/models.json` or injected at runtime via `AgentSessionOptions.providers`.
-
-## Tools
-
-Built-in tools: `read`, `write`, `edit`, `ls`, `grep`, `find`, `bash`.
-
-- `bash` requires a `ShellExecutor`; on Android and JVM use `UnixShellExecutor` (or pass `null` to disable shell access).
-- `grep` / `find` are pure Kotlin and honor `.gitignore` / `.ignore` / `.fdignore`.
-- Custom tools implement `CodingTool` and are passed through `AgentSessionOptions.tools`.
-
-## MCP
-
-The SDK embeds an MCP client (Streamable HTTP; stdio on JVM) and reads `mcp.json` from `<agentDir>/mcp.json` and the trusted project's `.pi/mcp.json` — the same `mcpServers` shape as other MCP clients.
-
-```kotlin
-val session = createAgentSession(
-    options.copy(
-        mcp = McpOptions(
-            servers = mapOf(
-                "docs" to McpServerConfig.Http(url = "https://mcp.example.com/mcp"),
-                "filesystem" to McpServerConfig.Stdio(command = "npx", args = listOf("-y", "@modelcontextprotocol/server-filesystem", ".")),
-            ),
-        ),
-    ),
-)
-```
-
-- Tools are namespaced `mcp__<server>__<tool>`; `direct` tools are declared immediately, `deferred` tools (the default) are loaded with `tool_search` and available from the next model call.
-- Resources (`list_mcp_resources`, `read_mcp_resource`) and MCP prompts (`session.promptMcp(...)` or `/mcp__server__prompt`) are supported.
-- OAuth 2.1 (discovery, DCR, PKCE, refresh, scope step-up) with tokens in `<agentDir>/mcp-auth.json`; Android hosts provide the browser interaction.
-- Runtime API: `session.mcp.servers`, `reconnect`, `reload`, `addServer`, `removeServer`, `setEnabled`, `healthCheck`, `signIn`.
-
-Full guide: [docs/MCP.md](docs/MCP.md).
-
-## Hooks
-
-`CodingHooks` supports input interception (`onInput`), prompt transformation, extra system prompt sections, and session start/shutdown callbacks.
-
-## Examples
+## Build, Verify & Docs
 
 ```bash
-./gradlew :examples:jvm-demo:run          # offline end-to-end demo using the faux provider
-./gradlew :examples:mcp-demo:run          # offline MCP demo (mock HTTP server, deferred tools, tool_search)
-./scripts/build-android-demo.sh           # publish to ~/.m2 and build the demo APK
+./gradlew build --no-daemon                    # compile JVM + Android and run all tests
+./gradlew publishAllPublicationsToPagesRepository
+./scripts/release-local.sh 0.7.0               # full verification + demos + checksum manifest
 ```
 
-The Android demo lives in `examples/android-demo` (standalone Gradle build) and includes an offline demo mode that needs no API key.
+- [Architecture](docs/ARCHITECTURE.md) · [SDK Reference](docs/SDK.md) · [MCP Guide](docs/MCP.md) · [Contracts](docs/CONTRACTS.md) · [SDK Contracts](docs/CONTRACTS-SDK.md) · [Release Guide](docs/RELEASE.md)
 
-## Build and test
+## Known Scope Boundaries
 
-```bash
-./gradlew build                           # compile all targets and run all tests
-./gradlew :pi-ai:jvmTest                  # fast JVM-only tests
-./gradlew publishToMavenLocal             # publish io.github.whywood.superpi.sdk:* artifacts locally
-node scripts/verify-release.mjs 0.7.0     # verify published artifacts (Java 17 bytecode, AARs, POMs)
-./scripts/release-local.sh 0.7.0          # clean build + tests + local publish + demos + checksums
-```
-
-On low-memory machines use `./scripts/gw.sh <tasks>` instead of `./gradlew` to serialize Gradle runs.
-
-## Known limitations
-
-- No CLI or terminal UI: the SDK exposes events and `AgentSession` for the host app to render.
-- No TypeScript extension compatibility; use Kotlin tools and hooks instead.
-- MCP codemode scripts are not supported (`codemode` exposure maps to deferred + `tool_search`); sampling/elicitation/roots are supported (sampling uses the session model and consumes tokens; elicitation requires a host handler); resource subscriptions, completion and CIMD are not implemented; legacy HTTP+SSE transport is rejected.
-- OpenAI Codex transport is SSE only (WebSocket/zstd not implemented).
-- Amazon Bedrock credentials come from environment variables or a bearer token (no profile/IMDS/STS chain).
-- Radius dynamic model catalog is stubbed; only the static gateway URL is supported.
-- Requests keep only the most recent inline images within a budget (default 20 images / 20 MiB of base64, override with `images.requestMaxImages` / `images.requestMaxBytes` in `settings.json`); older images are replaced by text placeholders in the request, while the session history and JSONL keep the originals.
-- JSON Schema validation covers common constraint keywords plus local `$ref`/`$defs`; `format` supports a subset.
-- Not implemented: codemode sandbox, virtual models, deferred responses, telemetry.
-- Android supports HTTP MCP servers only (no stdio subprocesses); Android OAuth needs a host-provided browser callback, and project `.pi/mcp.json` cannot define new servers (only override the global config).
+- Headless SDK (no CLI/TUI); rendering belongs to the host app ([`SuperPI`](https://github.com/Sadami3066/SuperPI)).
+- Android supports HTTP MCP servers (no stdio subprocesses); codemode scripts map to deferred tools + `tool_search`.
 
 ## License
 
-MIT. This project is a Kotlin rewrite of [pi](https://github.com/earendil-works/pi), which is MIT licensed; the original copyright and license are retained in `LICENSE`.
+[MIT](LICENSE) (Kotlin rewrite of [pi](https://github.com/earendil-works/pi)).

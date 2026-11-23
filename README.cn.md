@@ -1,81 +1,66 @@
-# SuperPI-KotlinSDK
+<div align="center">
+
+# SuperPI Kotlin SDK
+
+**面向 Android 与 JVM 的 Kotlin Multiplatform AI Agent SDK**
+
+<sub>基于 [pi](https://pi.dev)（`pi-ai`、`pi-agent`、`pi-mcp`、`pi-coding-agent`）的 Kotlin Multiplatform 实现，为 [SuperPI](https://github.com/Sadami3066/SuperPI) 提供核心运行时。</sub>
+
+[English](README.md) · 简体中文
 
 [![CI](https://github.com/Sadami3066/SuperPI-KotlinSDK/actions/workflows/ci.yml/badge.svg)](https://github.com/Sadami3066/SuperPI-KotlinSDK/actions/workflows/ci.yml)
+<img src="https://img.shields.io/badge/Version-0.7.0-111111?style=flat-square" alt="Version 0.7.0" />
+<img src="https://img.shields.io/badge/Kotlin-2.4.21-7F52FF?style=flat-square&logo=kotlin&logoColor=white" alt="Kotlin 2.4.21" />
+<img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" alt="MIT" />
 
-把 [pi](https://pi.dev)（`pi-ai`、`pi-agent`、`pi coding agent` 的 SDK 层）用 Kotlin 重写，产出一个用于构建 **Android / JVM AI agent 应用**的 Kotlin Multiplatform SDK。
+</div>
 
-[English](README.md)
+---
 
-状态：**0.7.0**。可编译、可发布 Android AAR 与 JVM JAR；JVM 测试 1,000+、Android host 测试数百；1.0 前 API 仍可能调整。
-
-## 模块
-
-| 模块 | 对应上游 | 内容 |
-|---|---|---|
-| `pi-ai` | `packages/ai` | 统一 LLM API：10 种 chat API、图片生成/分类器 API、42 个内置 provider、模型目录、认证（API key + 9 个 OAuth 流程）、流式事件、重试、usage/cost |
-| `pi-agent` | `packages/agent` | Agent 运行时：事件生命周期、工具执行（串行/并行）、hooks、steering/follow-up 队列、proxy |
-| `pi-mcp` | `packages/mcp`（子集） | MCP 客户端：Streamable HTTP + stdio（JVM）、工具/资源/提示词、OAuth 2.1、deferred 工具经 `tool_search` 加载 |
-| `pi-coding-agent` | `packages/coding-agent` 的 core/SDK 层 | 会话（pi 兼容 JSONL）、设置、模型解析、内置工具、系统提示词与资源、压缩、按模型 `inputLimits` 规范化输入与工具结果图片、长会话的请求级图片预算，以及 `AgentSession` / `createAgentSession` 门面 |
+## 模块概览
 
 依赖方向：`pi-coding-agent` → `pi-agent` → `pi-ai`，以及 `pi-coding-agent` → `pi-mcp` → `pi-ai`。
 
+| 模块 | 定位 | 核心能力 |
+|---|---|---|
+| `pi-ai` | 统一 LLM 接口与目录 | 10 种 Chat API、图像生成与分类、42 家内置服务商、9 种 OAuth、流式事件与重试计费 |
+| `pi-agent` | Agent 循环引擎 | 事件生命周期、串/并行工具执行、steering / follow-up 队列、hooks 与代理传输 |
+| `pi-mcp` | MCP 客户端 | Streamable HTTP + JVM stdio、基于 `tool_search` 的按需加载、Resources/Prompts、OAuth 2.1 |
+| `pi-coding-agent` | 会话与编码门面 | pi 兼容 JSONL 会话、压缩、请求级图片预算管理、`AgentSession` / `createAgentSession` |
+
 ## 环境要求
 
-- JDK 17+（发布产物为 Java 17 字节码）
-- Android：`minSdk 26`、`compileSdk 36`
-- 从源码构建：Gradle 9.8.2（自带 wrapper）+ Kotlin 2.4.21
+- JDK 17+（`jvmToolchain(17)`）
+- Android：`minSdk 26`、`compileSdk 36`、`android.useAndroidX=true`
 
-## 安装
+## 安装引用
 
-暂未发布到 Maven Central，三种方式：
-
-**JitPack**：加入仓库，用 Git tag 作为版本（`v0.7.0`）：
+打 `vX.Y.Z` tag 时由 CI 自动构建并发布到 [`SuperPI-Maven`](https://github.com/Sadami3066/SuperPI-Maven)：
 
 ```kotlin
 // settings.gradle.kts
-repositories {
-    maven("https://jitpack.io")
+dependencyResolutionManagement {
+    repositories {
+        maven("https://sadami3066.github.io/SuperPI-Maven") {
+            content { includeGroup("io.github.whywood.superpi.sdk") }
+        }
+        google()
+        mavenCentral()
+    }
 }
 ```
 
 ```kotlin
-// JVM
-implementation("com.github.Sadami3066.SuperPI-KotlinSDK:pi-coding-agent:v0.7.0")
-
-// Android
-implementation("com.github.Sadami3066.SuperPI-KotlinSDK:pi-coding-agent-android:v0.7.0")
-```
-
-JitPack 首次被请求某个 tag 时现场构建，第一次解析可能较慢；之后复用缓存。`pi-ai`、`pi-agent`、`pi-mcp` 用同一个 group 与 tag。
-
-**直接下载产物**：从 [GitHub Releases](https://github.com/Sadami3066/SuperPI-KotlinSDK/releases) 下载最新的 `superpi-kotlin-sdk-*-m2.zip`（或旧版 `pi2kotlin-*-m2.zip`），解压后把 repository 指向解压目录：
-
-```kotlin
-repositories {
-    maven { url = uri("path/to/unzipped") }
-    mavenCentral()
-}
-```
-
-**从源码构建**：
-
-```bash
-./gradlew publishToMavenLocal
-```
-
-按需依赖：
-
-```kotlin
-// JVM
-implementation("io.github.whywood.superpi.sdk:pi-coding-agent:0.7.0")
-
-// Android
+// Android 项目
 implementation("io.github.whywood.superpi.sdk:pi-coding-agent-android:0.7.0")
+
+// JVM 项目
+implementation("io.github.whywood.superpi.sdk:pi-coding-agent-jvm:0.7.0")
 ```
 
-Android 工程还需要 `android.useAndroidX=true`。
+若与 [`SuperPI`](https://github.com/Sadami3066/SuperPI) 主仓同级存放，可在主仓构建时传 `-Psuperpi.localSdk=true` 直接通过 Gradle Composite Build 联调未发布源码，或执行 `./gradlew publishToMavenLocal`。
 
-## 快速开始
+## 五分钟上手
 
 ```kotlin
 import io.github.whywood.superpi.sdk.ai.TextDeltaEvent
@@ -84,119 +69,43 @@ import io.github.whywood.superpi.sdk.agent.AgentEvent
 import io.github.whywood.superpi.sdk.coding.AgentSessionOptions
 import io.github.whywood.superpi.sdk.coding.createAgentSession
 import io.github.whywood.superpi.sdk.coding.session.SessionEvent
-import okio.Path.Companion.toPath
 
 val session = createAgentSession(
     AgentSessionOptions(
         cwd = workspaceDir,
-        agentDir = appPrivateDir.resolve("agent").absolutePath.toPath(),
+        agentDir = agentDir,
         transport = okHttpTransport(),
         model = "deepseek/deepseek-v4-flash",
     ),
 )
 
-val subscription = session.subscribe { event ->
+val unsubscribe = session.subscribe { event ->
     if (event is SessionEvent.AgentEventReceived) {
-        val agentEvent = event.event
-        if (agentEvent is AgentEvent.MessageUpdate) {
-            val update = agentEvent.assistantMessageEvent
-            if (update is TextDeltaEvent) print(update.delta)
-        }
+        val update = (event.event as? AgentEvent.MessageUpdate)?.assistantMessageEvent
+        if (update is TextDeltaEvent) print(update.delta)
     }
 }
 
-session.prompt("总结一下这个目录里的文件")
-println(session.getLastAssistantText())
-subscription()
+session.prompt("总结当前目录文件")
+unsubscribe()
 session.close()
 ```
 
-`createAgentSession` 会从 `cwd` 与 `agentDir` 解析设置、凭据、模型目录与资源（上下文文件、skills、prompt templates）。
-
-## 会话
-
-- 会话持久化为 pi 兼容的 JSONL（与 `~/.pi/agent/sessions` 相同格式），包含系统提示词快照与压缩条目
-- 传入 `sessionFile` 即可恢复；`session.prompt()` 在恢复的 transcript 上继续
-- `AgentSessionRuntime` 提供 `newSession()` / `switchSession()` / `fork()`（fork 可为被放弃分支生成摘要）
-- Android 上建议把 agent 目录放在应用私有目录
-
-## 模型与 provider
-
-- 内置 42 个 provider、1,714 条目录模型（chat/image/classifier）、10 种 chat API、9 个 OAuth 流程（Anthropic、OpenAI ChatGPT、GitHub Copilot、OpenAI Codex、xAI、OpenRouter、Kimi、Meta、Radius）
-- API key 读取顺序：`<agentDir>/auth.json`（与 pi 兼容）→ 自定义 `CredentialStore` → 环境变量
-- 自定义 provider：`<agentDir>/models.json`，或运行时通过 `AgentSessionOptions.providers` 注入
-
-## 工具
-
-内置：`read`、`write`、`edit`、`ls`、`grep`、`find`、`bash`。
-
-- `bash` 需要 `ShellExecutor`；Android/JVM 可用 `UnixShellExecutor`（传 `null` 即禁用 shell）
-- `grep` / `find` 为纯 Kotlin 实现，遵守 `.gitignore` / `.ignore` / `.fdignore`
-- 自定义工具实现 `CodingTool`，通过 `AgentSessionOptions.tools` 传入
-
-## MCP
-
-内置 MCP 客户端（Streamable HTTP；JVM 额外支持 stdio），读取 `<agentDir>/mcp.json` 与受信任项目的 `.pi/mcp.json`（与其他 MCP 客户端相同的 `mcpServers` 结构）。
-
-```kotlin
-val session = createAgentSession(
-    options.copy(
-        mcp = McpOptions(
-            servers = mapOf(
-                "docs" to McpServerConfig.Http(url = "https://mcp.example.com/mcp"),
-                "filesystem" to McpServerConfig.Stdio(command = "npx", args = listOf("-y", "@modelcontextprotocol/server-filesystem", ".")),
-            ),
-        ),
-    ),
-)
-```
-
-- 工具名 `mcp__<server>__<tool>`；`direct` 立即声明，`deferred`（默认）通过 `tool_search` 加载并在下一轮可用。
-- 资源三工具（`list_mcp_resources` / `read_mcp_resource` 等）与 MCP prompts（`session.promptMcp(...)` 或 `/mcp__server__prompt`）。
-- OAuth 2.1（发现、DCR、PKCE、刷新、scope step-up），token 存 `<agentDir>/mcp-auth.json`；Android 由宿主提供浏览器回调。
-- 运行时 API：`session.mcp.servers`、`reconnect`、`reload`、`addServer`、`removeServer`、`setEnabled`、`healthCheck`、`signIn`。
-
-完整说明见 [docs/MCP.md](docs/MCP.md)。
-
-## Hooks
-
-`CodingHooks` 支持输入拦截（`onInput`）、提示词改写、额外系统提示词 sections、会话启动/关闭回调。
-
-## 示例
+## 构建、校验与文档
 
 ```bash
-./gradlew :examples:jvm-demo:run          # 离线端到端演示（faux provider）
-./gradlew :examples:mcp-demo:run          # 离线 MCP 演示（本地 mock HTTP server + deferred 工具 + tool_search）
-./scripts/build-android-demo.sh           # 发布到 ~/.m2 并构建 demo APK
+./gradlew build --no-daemon                    # 编译 JVM + Android 并运行全套测试
+./gradlew publishAllPublicationsToPagesRepository
+./scripts/release-local.sh 0.7.0               # 干净构建 + 发布校验 + Demo + 校验和
 ```
 
-Android demo 位于 `examples/android-demo`（独立 Gradle 工程），内置离线演示模式，无需 API key。
+- [架构设计](docs/ARCHITECTURE.md) · [SDK 参考](docs/SDK.md) · [MCP 指南](docs/MCP.md) · [内部契约](docs/CONTRACTS.md) · [对外契约](docs/CONTRACTS-SDK.md) · [发版流程](docs/RELEASE.md)
 
-## 构建与测试
+## 已知边界
 
-```bash
-./gradlew build                           # 编译全部 target 并跑测试
-./gradlew :pi-ai:jvmTest                  # 只跑 JVM 快速测试
-./gradlew publishToMavenLocal             # 发布 io.github.whywood.superpi.sdk:* 到本地
-node scripts/verify-release.mjs 0.7.0     # 校验发布产物（Java 17 字节码/AAR/POM）
-./scripts/release-local.sh 0.7.0          # clean build + 测试 + 本地发布 + demo + 校验和
-```
+- 纯运行时 SDK，不含 CLI/TUI（UI 由宿主 [SuperPI](https://github.com/Sadami3066/SuperPI) 渲染）。
+- Android 端仅支持 HTTP MCP（不支持 stdio 子进程）；`codemode` 映射为 `deferred` + `tool_search`。
 
-低内存机器用 `./scripts/gw.sh <tasks>` 替代 `./gradlew`（串行化构建）。
+## 开源许可
 
-## 已知限制
-
-- 不含 CLI 与终端 UI：SDK 只暴露事件与 `AgentSession`，界面由宿主应用实现
-- 不兼容 TypeScript 扩展；扩展点使用 Kotlin 工具与 hooks
-- MCP 不支持 codemode 脚本（`codemode` 映射为 deferred + `tool_search`）；sampling/elicitation/roots 已支持（sampling 用当前会话模型、会消耗 token；elicitation 需宿主提供 handler）；resource subscriptions、completion、CIMD 未实现；legacy HTTP+SSE 传输被拒绝
-- OpenAI Codex 传输仅 SSE（WebSocket/zstd 未实现）
-- Amazon Bedrock 凭据仅支持环境变量或 bearer token（无 profile/IMDS/STS 链）
-- Radius 动态模型目录只有占位接口，支持静态 gateway URL
-- 请求只保留预算内最近的内联图片（默认 20 张 / 20MiB base64，可在 `settings.json` 用 `images.requestMaxImages` / `images.requestMaxBytes` 覆盖）；更旧的图在请求中替换为文本占位，会话历史与 JSONL 仍保留原图
-- JSON Schema 校验覆盖常用约束关键字与本地 `$ref`/`$defs`；`format` 为子集
-- 未实现：codemode 沙箱、虚拟模型、deferred responses、telemetry
-- Android 仅支持 HTTP MCP server（无 stdio 子进程）；Android OAuth 需宿主提供浏览器回调；项目 `.pi/mcp.json` 不能新增 server（只能覆盖全局配置）
-
-## 许可证
-
-MIT。本项目是 [pi](https://github.com/earendil-works/pi)（MIT）的 Kotlin 重写，上游版权与许可保留在 `LICENSE` 中。
+[MIT](LICENSE)（基于 [pi](https://github.com/earendil-works/pi) 的 Kotlin 重写实现）。
