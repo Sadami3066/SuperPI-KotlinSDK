@@ -33,7 +33,10 @@ class WriteToolTest {
         val tool = writeTool(cwd, fs, FileMutationQueue())
         val result = tool.execute("call-1", writeArgs("src/main.kt", "fun main() {}\n"), null, null)
 
-        assertEquals("Successfully wrote to src/main.kt", (result.content.single() as TextContent).text)
+        assertEquals(
+            "Successfully wrote 14 bytes (2 lines) to src/main.kt (created)",
+            (result.content.single() as TextContent).text,
+        )
         assertEquals("fun main() {}\n", fs.read("/work/project/src/main.kt".toPath()) { readUtf8() })
     }
 
@@ -42,9 +45,13 @@ class WriteToolTest {
         val fs = FakeFileSystem()
         fs.createDirectories("/work/project".toPath())
         fs.write("/work/project/a.txt".toPath()) { writeUtf8("old") }
-        writeTool(cwd, fs, FileMutationQueue())
+        val result = writeTool(cwd, fs, FileMutationQueue())
             .execute("call-1", writeArgs("a.txt", "new"), null, null)
         assertEquals("new", fs.read("/work/project/a.txt".toPath()) { readUtf8() })
+        assertEquals(
+            "Successfully wrote 3 bytes (1 lines) to a.txt (overwritten)",
+            (result.content.single() as TextContent).text,
+        )
     }
 
     @Test

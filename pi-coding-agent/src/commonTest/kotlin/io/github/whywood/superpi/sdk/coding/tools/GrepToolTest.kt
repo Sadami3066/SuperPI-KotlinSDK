@@ -157,6 +157,18 @@ class GrepToolTest {
             assertTrue(failure is IllegalArgumentException)
         }
     }
+
+    @Test
+    fun invalidRegexSuggestsLiteralMode() = runTest {
+        withTempDir { root ->
+            fs.writeText(root, "a.txt", "foo[bar\n")
+            val failure = runCatching {
+                runTool(grepTool(root, fs), args("pattern" to "foo[bar"))
+            }.exceptionOrNull()
+            assertTrue(failure is IllegalArgumentException)
+            assertTrue(failure.message.orEmpty().contains("literal=true"))
+        }
+    }
 }
 
 private suspend fun withTempDir(block: suspend (Path) -> Unit) {

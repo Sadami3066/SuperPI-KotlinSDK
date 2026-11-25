@@ -45,7 +45,7 @@ private val bashParameters: JsonObject = buildJsonObject {
 
 fun bashTool(cwd: Path, shellExecutor: ShellExecutor?): CodingTool = CodingTool(
     name = "bash",
-    description = "Execute a bash command in the current working directory. Returns stdout and stderr. Output is truncated to last $BASH_MAX_LINES lines or ${BASH_MAX_BYTES / 1024}KB (whichever is hit first). If truncated, full output is saved to a temp file. Optionally provide a timeout in seconds.",
+    description = "Execute a bash command in the current working directory. Returns stdout and stderr. Output is truncated to the last $BASH_MAX_LINES lines or ${BASH_MAX_BYTES / 1024}KB (whichever is hit first). Optionally provide a timeout in seconds.",
     parameters = bashParameters,
     label = "bash",
     promptSnippet = "Execute bash commands (ls, grep, find, etc.)",

@@ -66,9 +66,9 @@ fun editTool(cwd: Path, fs: FileSystem, mutationQueue: FileMutationQueue): Codin
         mutationQueue.withFile(absolutePath) {
             signal?.throwIfAborted()
             val metadata = fs.metadataOrNull(absolutePath)
-                ?: throw IllegalArgumentException("Could not edit file: $pathInput. Error code: ENOENT.")
+                ?: throw IllegalArgumentException("File not found: $pathInput")
             if (metadata.isDirectory) {
-                throw IllegalArgumentException("Could not edit file: $pathInput. Error code: EISDIR.")
+                throw IllegalArgumentException("Path is a directory, not a file: $pathInput")
             }
             signal?.throwIfAborted()
 
@@ -93,7 +93,14 @@ fun editTool(cwd: Path, fs: FileSystem, mutationQueue: FileMutationQueue): Codin
                 put("patch", patch)
                 diffResult.firstChangedLine?.let { put("firstChangedLine", it) }
             }
-            textResult("Successfully replaced ${edits.size} block(s) in $pathInput.", details)
+            val locationHint = diffResult.firstChangedLine?.let { " (starting at line $it)" }.orEmpty()
+            val preview = compactEditDiff(diffResult.diff)
+            val summary = if (preview.isEmpty()) {
+                "Successfully replaced ${edits.size} block(s) in $pathInput$locationHint."
+            } else {
+                "Successfully replaced ${edits.size} block(s) in $pathInput$locationHint.\n$preview"
+            }
+            textResult(summary, details)
         }
     },
 )
@@ -738,4 +745,33 @@ private fun formatUnifiedRange(startIndex: Int, count: Int): String = when {
     count == 0 -> "$startIndex,0"
     count == 1 -> "${startIndex + 1}"
     else -> "${startIndex + 1},$count"
+}
+
+private fun compactEditDiff(diff: String): String {
+    if (diff.isBlank()) return ""
+    val lines = diff.lines()
+    val maxLines = 30
+    val maxChars = 2000
+    val kept = mutableListOf<String>()
+    var usedChars = 0
+    var truncated = false
+    for (line in lines) {
+        if (kept.size >= maxLines) {
+            truncated = true
+            break
+        }
+        val extra = line.length + if (kept.isEmpty()) 0 else 1
+        if (usedChars + extra > maxChars && kept.isNotEmpty()) {
+            truncated = true
+            break
+        }
+        kept += if (line.length > maxChars) {
+            truncated = true
+            line.take(maxChars - 3) + "..."
+        } else {
+            line
+        }
+        usedChars += extra
+    }
+    return if (truncated) kept.joinToString("\n") + "\n... (diff truncated)" else kept.joinToString("\n")
 }

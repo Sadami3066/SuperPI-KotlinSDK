@@ -57,7 +57,10 @@ class EditToolTest {
             .execute("call-1", editArgs("a.txt", listOf("world" to "there")), null, null)
 
         assertEquals("hello there\n", fs.read("/work/project/a.txt".toPath()) { readUtf8() })
-        assertEquals("Successfully replaced 1 block(s) in a.txt.", text(result))
+        val contentText = text(result)
+        assertTrue(contentText.startsWith("Successfully replaced 1 block(s) in a.txt (starting at line 1)."))
+        assertTrue(contentText.contains("-1 hello world"))
+        assertTrue(contentText.contains("+1 hello there"))
         val details = assertIs<JsonObject>(result.details)
         assertEquals("-1 hello world\n+1 hello there", details["diff"]?.jsonPrimitive?.content)
         assertEquals(1, details["firstChangedLine"]?.jsonPrimitive?.int)
@@ -72,7 +75,7 @@ class EditToolTest {
             .execute("call-1", editArgs("a.txt", listOf("b" to "B", "c" to "C")), null, null)
 
         assertEquals("a\nB\nC\n", fs.read("/work/project/a.txt".toPath()) { readUtf8() })
-        assertEquals("Successfully replaced 2 block(s) in a.txt.", text(result))
+        assertTrue(text(result).startsWith("Successfully replaced 2 block(s) in a.txt (starting at line 2)."))
         val details = assertIs<JsonObject>(result.details)
         assertEquals(2, details["firstChangedLine"]?.jsonPrimitive?.int)
     }
@@ -188,7 +191,7 @@ class EditToolTest {
             editTool(cwd, fs, FileMutationQueue())
                 .execute("call-1", editArgs("missing.txt", listOf("a" to "b")), null, null)
         }
-        assertEquals("Could not edit file: missing.txt. Error code: ENOENT.", error.message)
+        assertEquals("File not found: missing.txt", error.message)
     }
 
     @Test

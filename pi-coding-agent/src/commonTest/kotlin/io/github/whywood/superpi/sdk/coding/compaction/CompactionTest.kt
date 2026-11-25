@@ -847,4 +847,62 @@ class CompactionTest {
         assertEquals(listOf("user", "assistant"), prep.messagesToSummarize.map(::roleOf))
         assertEquals(listOf("user"), prep.turnPrefixMessages.map(::roleOf))
     }
+
+    @Test
+    fun `estimateTokens weights non-ascii CJK text accurately`() {
+        val chinese = UserMessage(PlainTextContent("你好世界测试文本"), 0)
+        assertEquals(12L, estimateTokens(chinese))
+    }
+
+    @Test
+    fun `findMicroCompactionEdits clears stale large tool results only above soft threshold`() {
+        val largeText = "data-".repeat(600)
+        val entries = listOf(
+            u("e1", null, "step1"),
+            a("e2", "e1", "ok", toolCalls = listOf(ToolCall("t1", "web_fetch", JsonObject(emptyMap())))),
+            tr("e3", "e2", "t1", largeText),
+            u("e4", "e3", "step2"),
+            a("e5", "e4", "ok"),
+            u("e6", "e5", "step3"),
+            a("e7", "e6", "ok"),
+            u("e8", "e7", "step4"),
+            a("e9", "e8", "ok"),
+            u("e10", "e9", "step5"),
+        )
+        assertTrue(findMicroCompactionEdits(entries, contextWindow = 10_000L, currentTokens = 5_000L).isEmpty())
+        val edits = findMicroCompactionEdits(entries, contextWindow = 10_000L, currentTokens = 7_000L)
+        assertEquals(1, edits.size)
+        assertEquals("e3", edits.single().targetEntryId)
+        assertTrue(edits.single().replacementText.contains("Cleared earlier"))
+    }
+
+    @Test
+    fun `serializeConversationWithinBudget trims bulky outputs to fit tight window`() {
+        val messages = (1..10).flatMap { index ->
+            listOf(
+                UserMessage(PlainTextContent("turn $index question"), index.toLong()),
+                ToolResultMessage(
+                    toolCallId = "t$index",
+                    toolName = "bash",
+                    content = listOf(TextContent("x".repeat(1_800))),
+                    isError = false,
+                    timestamp = index.toLong(),
+                ),
+            )
+        }
+        val compact = serializeConversationWithinBudget(messages, maxTokens = 800L)
+        assertTrue(estimateTextTokens(compact) <= 800L)
+        assertTrue(compact.contains("turn 10 question"))
+    }
+
+    @Test
+    fun `shouldCompact honors triggerRatio before reserveTokens when tighter`() {
+        val ratioSettings = CompactionSettings(enabled = true, reserveTokens = 16_384, keepRecentTokens = 20_000, triggerRatio = 0.75)
+        assertEquals(false, shouldCompact(74_999L, 100_000L, ratioSettings))
+        assertTrue(shouldCompact(75_000L, 100_000L, ratioSettings))
+        assertTrue(shouldCompact(80_000L, 100_000L, ratioSettings))
+        val tinyWindow = CompactionSettings(enabled = true, reserveTokens = 4_000, keepRecentTokens = 500, triggerRatio = 0.90)
+        assertTrue(shouldCompact(6_001L, 10_000L, tinyWindow))
+        assertEquals(false, shouldCompact(6_000L, 10_000L, tinyWindow))
+    }
 }

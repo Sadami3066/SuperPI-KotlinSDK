@@ -179,4 +179,13 @@ class RequestImageBudgetTest {
         val messages = emptyList<Message>()
         assertSame(messages, limitRequestImages(messages, 2, 1000))
     }
+
+    @Test
+    fun appliesBatchHysteresisWhenExceedingLargeImageBudget() {
+        val messages = (1..21).map { index -> user("turn-$index", "img-$index") }
+        val firstTrim = limitRequestImages(messages, 20, 20L * 1024L * 1024L)
+        assertEquals(14, firstTrim.imageData().size)
+        val afterAddingOneMore = firstTrim + user("turn-22", "img-22")
+        assertSame(afterAddingOneMore, limitRequestImages(afterAddingOneMore, 20, 20L * 1024L * 1024L))
+    }
 }

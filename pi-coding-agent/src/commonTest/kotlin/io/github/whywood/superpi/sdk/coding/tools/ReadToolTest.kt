@@ -107,7 +107,7 @@ class ReadToolTest {
         fs.putText("/work/project/big.txt", "a".repeat(60000))
         val text = readTool(cwd, fs).execute("call-1", textArgs("big.txt"), null, null).text()
         assertEquals(
-            "[Line 1 is 58.6KB, exceeds 50.0KB limit. Use bash: sed -n '1p' big.txt | head -c 51200]",
+            "[Line 1 is 58.6KB, exceeds 50.0KB limit. Read a smaller byte slice or inspect the line with a shell command if available.]",
             text,
         )
     }
@@ -118,7 +118,7 @@ class ReadToolTest {
         val error = assertFailsWith<IllegalArgumentException> {
             readTool(cwd, fs).execute("call-1", textArgs("missing.txt"), null, null)
         }
-        assertEquals("ENOENT: no such file or directory, access '/work/project/missing.txt'", error.message)
+        assertEquals("File not found: missing.txt (/work/project/missing.txt)", error.message)
     }
 
     @Test
@@ -128,7 +128,16 @@ class ReadToolTest {
         val error = assertFailsWith<IllegalArgumentException> {
             readTool(cwd, fs).execute("call-1", textArgs("folder"), null, null)
         }
-        assertEquals("EISDIR: illegal operation on a directory, read", error.message)
+        assertEquals("Path is a directory, not a file: folder", error.message)
+    }
+
+    @Test
+    fun returnsExplicitMarkerForEmptyFileAndExcludesBmpFromDescription() = runTest {
+        val fs = newFs()
+        fs.putText("/work/project/empty.txt", "")
+        val tool = readTool(cwd, fs)
+        assertEquals("(empty file)", tool.execute("call-1", textArgs("empty.txt"), null, null).text())
+        assertTrue(!tool.description.contains("bmp"))
     }
 
     @Test

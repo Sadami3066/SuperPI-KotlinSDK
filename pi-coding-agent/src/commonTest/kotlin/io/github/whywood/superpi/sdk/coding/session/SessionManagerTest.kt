@@ -152,6 +152,24 @@ class SessionManagerTest {
     }
 
     @Test
+    fun openUsesFallbackCwdForNewOrEmptySessionFile() = runTest {
+        val fs = FakeFileSystem()
+        val sessionFile = "/super/workers/w1/session.jsonl".toPath()
+        val workspaceDir = "/super/workers/w1/workspace".toPath()
+        val created = SessionManager.open(sessionFile, fs, workspaceDir)
+        assertEquals("/super/workers/w1/workspace", created.cwd.toString())
+        assertEquals("/super/workers/w1/workspace", created.getHeader().cwd)
+
+        val emptyFile = "/super/workers/w2/session.jsonl".toPath()
+        fs.createDirectories("/super/workers/w2".toPath())
+        fs.write(emptyFile) {}
+        val emptyOpened = SessionManager.open(emptyFile, fs, "/super/workers/w2/workspace".toPath())
+        assertEquals("/super/workers/w2/workspace", emptyOpened.getHeader().cwd)
+        val persisted = SessionManager.open(emptyFile, fs, "/ignored/cwd".toPath())
+        assertEquals("/super/workers/w2/workspace", persisted.getHeader().cwd)
+    }
+
+    @Test
     fun branchMovesLeafAndFormsTree() = runTest {
         val fs = FakeFileSystem()
         val session = SessionManager.create(agentPaths(), fs)

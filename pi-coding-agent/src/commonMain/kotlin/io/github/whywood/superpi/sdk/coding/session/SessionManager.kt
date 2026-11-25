@@ -861,30 +861,35 @@ class SessionManager private constructor(
             return manager
         }
 
-        suspend fun open(file: Path, fs: FileSystem): SessionManager {
+        suspend fun open(file: Path, fs: FileSystem): SessionManager =
+            open(file, fs, null)
+
+        suspend fun open(file: Path, fs: FileSystem, fallbackCwd: Path?): SessionManager {
             val resolved = file.normalized()
             val loaded = loadSession(resolved, fs)
             if (loaded != null) {
                 val sessionCwd = loaded.header.cwd.takeIf { it.isNotEmpty() }?.toPath()
+                    ?: fallbackCwd?.normalized()
                     ?: resolved.parent
                     ?: resolved
                 val manager = SessionManager(fs, resolved.parent ?: ".".toPath(), true, sessionCwd)
                 manager.initializeLoaded(loaded, resolved)
                 return manager
             }
+            val initialCwd = (fallbackCwd ?: resolved.parent ?: resolved).normalized()
             if (fs.exists(resolved)) {
                 val size = fs.metadataOrNull(resolved)?.size ?: 0L
                 if (size > 0L) {
                     throw IllegalArgumentException("Session file is not a valid pi session: $resolved")
                 }
-                val manager = SessionManager(fs, resolved.parent ?: ".".toPath(), true, resolved.parent ?: resolved)
+                val manager = SessionManager(fs, resolved.parent ?: ".".toPath(), true, initialCwd)
                 manager.initializeNewSession(null, null)
                 manager.sessionFileValue = resolved
                 manager.rewriteFile()
                 manager.flushed = true
                 return manager
             }
-            val manager = SessionManager(fs, resolved.parent ?: ".".toPath(), true, resolved.parent ?: resolved)
+            val manager = SessionManager(fs, resolved.parent ?: ".".toPath(), true, initialCwd)
             manager.initializeNewSession(null, null)
             manager.sessionFileValue = resolved
             return manager

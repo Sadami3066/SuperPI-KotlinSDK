@@ -34,7 +34,7 @@ private val toolsGrepParameters: JsonObject = buildJsonObject {
         }
         putJsonObject("glob") {
             put("type", "string")
-            put("description", "Filter files by glob pattern, e.g. '*.ts' or '**/*.spec.ts'")
+            put("description", "Filter files by glob pattern, e.g. '*.kt' or '**/*.md'")
         }
         putJsonObject("ignoreCase") {
             put("type", "boolean")
@@ -280,7 +280,13 @@ private fun buildMatcher(pattern: String, ignoreCase: Boolean, literal: Boolean)
         return { line -> (if (ignoreCase) line.lowercase() else line).contains(needle) }
     }
     val options = if (ignoreCase) setOf(RegexOption.IGNORE_CASE) else emptySet()
-    val regex = Regex(pattern, options)
+    val regex = try {
+        Regex(pattern, options)
+    } catch (error: IllegalArgumentException) {
+        throw IllegalArgumentException(
+            "Invalid regex pattern '$pattern': ${error.message}. Set literal=true for literal string search.",
+        )
+    }
     return { line -> regex.containsMatchIn(line) }
 }
 

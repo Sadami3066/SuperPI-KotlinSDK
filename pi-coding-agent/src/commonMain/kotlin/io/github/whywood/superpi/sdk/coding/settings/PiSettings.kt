@@ -94,6 +94,7 @@ data class CompactionSettings(
     val reserveTokens: Long = SettingsDefaults.COMPACTION_RESERVE_TOKENS,
     val keepRecentTokens: Long = SettingsDefaults.COMPACTION_KEEP_RECENT_TOKENS,
     val modelOverrides: Map<String, CompactionModelOverride>? = null,
+    val triggerRatio: Double? = null,
 )
 
 data class BranchSummarySettings(
@@ -370,6 +371,7 @@ internal object PiSettingsCodec {
                     }
                 }.toMap()
             },
+            triggerRatio = reader.double("triggerRatio")?.takeIf { it > 0.0 && it < 1.0 },
         )
     }
 
@@ -476,6 +478,12 @@ internal object PiSettingsCodec {
             primitive.content.toLongOrNull()?.let { return it }
             val number = primitive.content.toDoubleOrNull() ?: return null
             return if (number.isFinite() && number % 1.0 == 0.0) number.toLong() else null
+        }
+
+        fun double(key: String): Double? {
+            val primitive = raw[key] as? JsonPrimitive ?: return null
+            if (primitive.isString) return null
+            return primitive.content.toDoubleOrNull()?.takeIf { it.isFinite() }
         }
 
         fun obj(key: String): JsonObject? = raw[key] as? JsonObject

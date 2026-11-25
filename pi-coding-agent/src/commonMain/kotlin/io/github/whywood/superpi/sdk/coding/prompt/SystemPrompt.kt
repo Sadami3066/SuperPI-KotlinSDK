@@ -76,7 +76,8 @@ fun buildSystemPrompt(input: SystemPromptInput): SystemPromptSections {
         } else {
             input.toolSnippets.joinToString("\n") { snippet -> "- $snippet" }
         }
-        sections["tools"] = "$tools\n\n$TOOLS_TRAILER"
+        val includeDeferredTrailer = "tool_search" in declaredTools || "tool_execute" in declaredTools
+        sections["tools"] = if (includeDeferredTrailer) "$tools\n\n$TOOLS_TRAILER" else tools
         sections["rules"] = buildRules(declaredTools, input.toolGuidelines)
         val docs = buildDocsSection(input.docsPaths)
         if (docs != null) sections["docs"] = docs
@@ -141,6 +142,22 @@ fun diffSystemPromptSectionMap(
         if (!current.sections.containsKey(name)) patch[name] = null
     }
     return patch
+}
+
+fun mergeSystemPromptSections(
+    base: Map<String, String>,
+    extras: Map<String, String>,
+): SystemPromptSections {
+    if (extras.isEmpty()) return SystemPromptSections(base)
+    val merged = LinkedHashMap(base)
+    for ((name, value) in extras) {
+        if (value.isEmpty()) {
+            merged.remove(name)
+        } else {
+            merged[name] = value
+        }
+    }
+    return SystemPromptSections(merged)
 }
 
 private fun resolveSkillFileReadTool(declaredTools: List<String>, selectedTools: List<String>): SkillFileReadTool? {

@@ -2,6 +2,7 @@ package io.github.whywood.superpi.sdk.coding.compaction
 
 import io.github.whywood.superpi.sdk.ai.AssistantMessage
 import io.github.whywood.superpi.sdk.ai.BlockContent
+import io.github.whywood.superpi.sdk.ai.ImageContent
 import io.github.whywood.superpi.sdk.ai.Message
 import io.github.whywood.superpi.sdk.ai.Model
 import io.github.whywood.superpi.sdk.ai.StopReason
@@ -108,30 +109,69 @@ fun getLastAssistantUsage(entries: List<SessionEntry>): Usage? {
     return null
 }
 
-fun estimateTokens(message: Message): Long = when (message) {
-    is SystemMessage -> {
-        var chars = estimateTextAndImageContentChars(message.content)
-        message.sections?.values?.forEach { section -> if (section != null) chars += section.length }
-        message.toolsAdded?.let { tools -> chars += encodeToolsJson(tools).toString().length }
-        estimateCharsToTokens(chars)
-    }
+fun estimateTokens(message: Message): Long = TokenCharStats().apply {
+    when (message) {
+        is SystemMessage -> {
+            addContent(message.content)
+            message.sections?.values?.forEach { section -> if (section != null) addText(section) }
+            message.toolsAdded?.let { tools -> addText(encodeToolsJson(tools).toString()) }
+        }
 
-    is UserMessage -> estimateCharsToTokens(estimateTextAndImageContentChars(message.content))
+        is UserMessage -> addContent(message.content)
 
-    is AssistantMessage -> {
-        var chars = 0L
-        for (block in message.content) {
-            when (block) {
-                is TextContent -> chars += block.text.length
-                is ThinkingContent -> chars += block.thinking.length
-                is ToolCall -> chars += block.name.length + block.arguments.toString().length
-                else -> Unit
+        is AssistantMessage -> {
+            for (block in message.content) {
+                when (block) {
+                    is TextContent -> addText(block.text)
+                    is ThinkingContent -> addText(block.thinking)
+                    is ToolCall -> {
+                        addText(block.name)
+                        addText(block.arguments.toString())
+                    }
+                    else -> Unit
+                }
             }
         }
-        estimateCharsToTokens(chars)
-    }
 
-    is ToolResultMessage -> estimateCharsToTokens(estimateTextAndImageContentChars(message.content))
+        is ToolResultMessage -> addBlocks(message.content)
+    }
+}.estimatedTokens()
+
+data class MicroCompactionEdit(
+    val targetEntryId: String,
+    val replacementText: String,
+)
+
+fun findMicroCompactionEdits(
+    branchEntries: List<SessionEntry>,
+    contextWindow: Long,
+    currentTokens: Long,
+    softThresholdRatio: Double = 0.65,
+    keepRecentMessages: Int = 6,
+    minToolResultChars: Int = 2_000,
+): List<MicroCompactionEdit> {
+    if (contextWindow <= 0L || currentTokens < (contextWindow * softThresholdRatio).toLong()) {
+        return emptyList()
+    }
+    val projection = buildSessionProjection(branchEntries)
+    val alreadyEditedIds = branchEntries.filterIsInstance<ContextEditEntry>().mapTo(HashSet()) { it.targetId }
+    val activeEntries = projection.entries.filter { it.messages.isNotEmpty() && it.sourceEntry !is CompactionEntry }
+    if (activeEntries.size <= keepRecentMessages) return emptyList()
+    val candidates = activeEntries.subList(0, activeEntries.size - keepRecentMessages)
+    val edits = mutableListOf<MicroCompactionEdit>()
+    for (entry in candidates) {
+        val source = entry.sourceEntry as? SessionMessageEntry ?: continue
+        if (source.id in alreadyEditedIds) continue
+        val message = entry.messages.singleOrNull() as? ToolResultMessage ?: continue
+        if (message.content.any { it is ImageContent }) continue
+        val text = contentText(message.content, "\n")
+        if (text.length < minToolResultChars) continue
+        edits += MicroCompactionEdit(
+            targetEntryId = source.id,
+            replacementText = "[Cleared earlier ${message.toolName} result (${text.length} chars) to save context; re-run ${message.toolName} if needed]",
+        )
+    }
+    return edits
 }
 
 fun estimateMessagesTokens(messages: List<Message>): Long = messages.sumOf { estimateTokens(it) }
@@ -193,8 +233,12 @@ fun estimateProjectedContextTokens(
 }
 
 fun shouldCompact(contextTokens: Long, contextWindow: Long, settings: CompactionSettings): Boolean {
-    if (!settings.enabled) return false
-    return contextTokens > contextWindow - settings.reserveTokens
+    if (!settings.enabled || contextWindow <= 0L) return false
+    val reserveThreshold = contextWindow - settings.reserveTokens
+    if (contextTokens > reserveThreshold) return true
+    val ratio = settings.triggerRatio?.takeIf { it > 0.0 && it < 1.0 } ?: return false
+    val ratioThreshold = (contextWindow * ratio).toLong()
+    return contextTokens >= ratioThreshold
 }
 
 fun isCutPointMessage(message: Message): Boolean = when (message) {
@@ -463,7 +507,12 @@ private suspend fun generateSummaryWithUsage(
         basePrompt = "$basePrompt${SummaryPrompts.ADDITIONAL_FOCUS_PREFIX}$customInstructions"
     }
 
-    val conversationText = serializeConversation(messages)
+    val overhead = estimateTextTokens(SummaryPrompts.SUMMARIZATION_SYSTEM_PROMPT) +
+        estimateTextTokens(basePrompt) +
+        estimateTextTokens(previousSummary.orEmpty()) +
+        256L
+    val conversationBudget = (model.contextWindow - 8_192L - overhead).coerceAtLeast(2_048L)
+    val conversationText = serializeConversationWithinBudget(messages, conversationBudget)
     var promptText = SummaryPrompts.CONVERSATION_OPEN + conversationText + SummaryPrompts.CONVERSATION_CLOSE
     if (previousSummary != null) {
         promptText += SummaryPrompts.PREVIOUS_SUMMARY_OPEN + previousSummary +
@@ -482,7 +531,12 @@ private suspend fun generateTurnPrefixSummary(
     customInstructions: String?,
     summarize: Summarize,
 ): SummaryResult {
-    val conversationText = serializeConversation(messages)
+    val overhead = estimateTextTokens(SummaryPrompts.SUMMARIZATION_SYSTEM_PROMPT) +
+        estimateTextTokens(SummaryPrompts.TURN_PREFIX_SUMMARIZATION_PROMPT) +
+        estimateTextTokens(customInstructions.orEmpty()) +
+        256L
+    val conversationBudget = (model.contextWindow - 8_192L - overhead).coerceAtLeast(2_048L)
+    val conversationText = serializeConversationWithinBudget(messages, conversationBudget)
     var promptText = SummaryPrompts.TURN_PREFIX_INPUT_PREFIX + conversationText +
         SummaryPrompts.TURN_PREFIX_INSTRUCTIONS_PREFIX + SummaryPrompts.TURN_PREFIX_SUMMARIZATION_PROMPT
     if (!customInstructions.isNullOrEmpty()) {

@@ -126,10 +126,17 @@ class McpToolSearch(
     private val onLoaded: suspend (List<String>) -> Unit,
 ) {
     fun search(query: String, limit: Int = DEFAULT_TOOL_SEARCH_LIMIT): List<McpDeferredTool> {
-        val queryTerms = tokenizeToolSearchText(query).distinct()
-        if (queryTerms.isEmpty() || limit <= 0) return emptyList()
+        val trimmed = query.trim()
+        if (trimmed.isEmpty() || limit <= 0) return emptyList()
         val documents = catalog()
         if (documents.isEmpty()) return emptyList()
+        if (trimmed == "*" || trimmed.equals("all", ignoreCase = true)) {
+            return documents.sortedBy { it.name }.take(limit)
+        }
+        val queryTerms = tokenizeToolSearchText(trimmed).distinct()
+        if (queryTerms.isEmpty()) {
+            return substringFallback(documents, trimmed, limit)
+        }
         val termCounts = documents.map { tool ->
             val counts = HashMap<String, Int>()
             for (term in tokenizeToolSearchText(toolSearchText(tool))) {
@@ -158,10 +165,32 @@ class McpToolSearch(
                 scored += Triple(tool, score, tool.name)
             }
         }
+        if (scored.isEmpty()) {
+            return substringFallback(documents, trimmed, limit)
+        }
         return scored
             .sortedWith(compareByDescending<Triple<McpDeferredTool, Double, String>> { it.second }.thenBy { it.third })
             .take(limit)
             .map { it.first }
+    }
+
+    private fun substringFallback(
+        documents: List<McpDeferredTool>,
+        query: String,
+        limit: Int,
+    ): List<McpDeferredTool> {
+        val needle = query.lowercase()
+        val tokens = needle.split(Regex("\\s+")).filter { it.isNotEmpty() }
+        if (tokens.isEmpty()) return emptyList()
+        return documents
+            .mapNotNull { tool ->
+                val haystack = (toolSearchText(tool) + " " + tool.server).lowercase()
+                val hits = tokens.count { token -> haystack.contains(token) }
+                if (hits > 0) hits to tool else null
+            }
+            .sortedWith(compareByDescending<Pair<Int, McpDeferredTool>> { it.first }.thenBy { it.second.name })
+            .take(limit)
+            .map { it.second }
     }
 
     fun toCodingTool(): CodingTool = CodingTool(

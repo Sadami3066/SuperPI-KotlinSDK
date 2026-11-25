@@ -38,13 +38,21 @@ fun writeTool(cwd: Path, fs: FileSystem, mutationQueue: FileMutationQueue): Codi
         val directory = absolutePath.parent
         mutationQueue.withFile(absolutePath) {
             signal?.throwIfAborted()
+            val existing = fs.metadataOrNull(absolutePath)
+            if (existing?.isDirectory == true) {
+                throw IllegalArgumentException("Path is a directory, not a file: $pathInput")
+            }
+            val existed = existing != null
             if (directory != null) {
                 fs.createDirectories(directory)
             }
             signal?.throwIfAborted()
             fs.write(absolutePath) { writeUtf8(content) }
             signal?.throwIfAborted()
-            textResult("Successfully wrote to $pathInput")
+            val byteCount = content.encodeToByteArray().size
+            val lineCount = if (content.isEmpty()) 0 else content.count { it == '\n' } + 1
+            val status = if (existed) "overwritten" else "created"
+            textResult("Successfully wrote $byteCount bytes ($lineCount lines) to $pathInput ($status)")
         }
     },
 )

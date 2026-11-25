@@ -30,6 +30,7 @@ import io.github.whywood.superpi.sdk.coding.prompt.ResourceLoader
 import io.github.whywood.superpi.sdk.coding.prompt.SystemPromptInput
 import io.github.whywood.superpi.sdk.coding.prompt.SystemPromptSections
 import io.github.whywood.superpi.sdk.coding.prompt.buildSystemPrompt
+import io.github.whywood.superpi.sdk.coding.prompt.mergeSystemPromptSections
 import io.github.whywood.superpi.sdk.coding.session.AgentSession
 import io.github.whywood.superpi.sdk.coding.session.CodingHooks
 import io.github.whywood.superpi.sdk.coding.mcp.DefaultMcpTransportFactory
@@ -84,6 +85,7 @@ data class AgentSessionOptions(
     val projectTrusted: Boolean? = null,
     val mcp: io.github.whywood.superpi.sdk.coding.mcp.McpOptions = io.github.whywood.superpi.sdk.coding.mcp.McpOptions(),
     val excludedSkills: Set<String> = emptySet(),
+    val compactionSettingsProvider: (() -> io.github.whywood.superpi.sdk.coding.settings.CompactionSettings)? = null,
 )
 
 suspend fun createAgentSession(options: AgentSessionOptions): AgentSession {
@@ -111,7 +113,7 @@ suspend fun createAgentSession(options: AgentSessionOptions): AgentSession {
     val modelRuntime = ModelRuntime(models, credentialStore, options.env)
 
     val sessionManager = if (options.sessionFile != null) {
-        SessionManager.open(options.sessionFile, options.fs)
+        SessionManager.open(options.sessionFile, options.fs, options.cwd)
     } else {
         SessionManager.create(paths, options.fs)
     }
@@ -224,6 +226,7 @@ suspend fun createAgentSession(options: AgentSessionOptions): AgentSession {
         initialSections = initialSections,
         staticSystemPromptSections = options.extraSystemPromptSections,
         scope = scope,
+        compactionSettingsProvider = options.compactionSettingsProvider,
     )
     session.start()
     if (options.mcp.enabled) {
@@ -248,14 +251,11 @@ private fun buildFreshSections(
             projectInstructions = resources.contextFiles,
             skills = resources.skills,
             cwd = options.cwd,
+            selectedTools = tools.map { it.name },
         ),
     )
     val extras = options.extraSystemPromptSections + options.initialSystemPromptSections
-    return if (extras.isEmpty()) {
-        built
-    } else {
-        SystemPromptSections(built.sections + extras)
-    }
+    return mergeSystemPromptSections(built.sections, extras)
 }
 
 private fun replaySystemSections(messages: List<io.github.whywood.superpi.sdk.agent.AgentMessage>): Map<String, String> {

@@ -16,6 +16,19 @@ internal const val REQUEST_IMAGE_OMITTED_MESSAGE =
         "image budget. Re-read the file or take a new screenshot if you need to see it again.]"
 
 internal fun limitRequestImages(messages: List<Message>, maxImages: Int, maxBytes: Long): List<Message> {
+    var totalImages = 0
+    var totalBytes = 0L
+    for (message in messages) {
+        for (image in message.requestImages()) {
+            totalImages += 1
+            totalBytes += image.data.length.toLong()
+        }
+    }
+    if (totalImages == 0 || (totalImages <= maxImages && totalBytes <= maxBytes)) {
+        return messages
+    }
+    val targetImages = if (maxImages >= 8) (maxImages * 7 / 10).coerceAtLeast(1) else maxImages
+    val targetBytes = if (maxBytes >= 1024L * 1024L) (maxBytes * 7L) / 10L else maxBytes
     var keptImages = 0
     var keptBytes = 0L
     var limited: MutableList<Message>? = null
@@ -25,7 +38,7 @@ internal fun limitRequestImages(messages: List<Message>, maxImages: Int, maxByte
         val keep = BooleanArray(images.size)
         for (position in images.indices.reversed()) {
             val size = images[position].data.length.toLong()
-            val keepImage = keptImages == 0 || (keptImages < maxImages && keptBytes + size <= maxBytes)
+            val keepImage = keptImages == 0 || (keptImages < targetImages && keptBytes + size <= targetBytes)
             keep[position] = keepImage
             if (keepImage) {
                 keptImages += 1

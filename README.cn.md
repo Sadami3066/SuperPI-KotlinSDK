@@ -9,7 +9,7 @@
 [English](README.md) · 简体中文
 
 [![CI](https://github.com/Sadami3066/SuperPI-KotlinSDK/actions/workflows/ci.yml/badge.svg)](https://github.com/Sadami3066/SuperPI-KotlinSDK/actions/workflows/ci.yml)
-<img src="https://img.shields.io/badge/Version-0.7.0-111111?style=flat-square" alt="Version 0.7.0" />
+<img src="https://img.shields.io/badge/Version-0.7.1-111111?style=flat-square" alt="Version 0.7.1" />
 <img src="https://img.shields.io/badge/Kotlin-2.4.21-7F52FF?style=flat-square&logo=kotlin&logoColor=white" alt="Kotlin 2.4.21" />
 <img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" alt="MIT" />
 
@@ -52,10 +52,10 @@ dependencyResolutionManagement {
 
 ```kotlin
 // Android 项目
-implementation("io.github.whywood.superpi.sdk:pi-coding-agent-android:0.7.0")
+implementation("io.github.whywood.superpi.sdk:pi-coding-agent-android:0.7.1")
 
 // JVM 项目
-implementation("io.github.whywood.superpi.sdk:pi-coding-agent-jvm:0.7.0")
+implementation("io.github.whywood.superpi.sdk:pi-coding-agent-jvm:0.7.1")
 ```
 
 若与 [`SuperPI`](https://github.com/Sadami3066/SuperPI) 主仓同级存放，可在主仓构建时传 `-Psuperpi.localSdk=true` 直接通过 Gradle Composite Build 联调未发布源码，或执行 `./gradlew publishToMavenLocal`。
@@ -96,7 +96,7 @@ session.close()
 ```bash
 ./gradlew build --no-daemon                    # 编译 JVM + Android 并运行全套测试
 ./gradlew publishAllPublicationsToPagesRepository
-./scripts/release-local.sh 0.7.0               # 干净构建 + 发布校验 + Demo + 校验和
+./scripts/release-local.sh 0.7.1               # 干净构建 + 发布校验 + Demo + 校验和
 ```
 
 - [架构设计](docs/ARCHITECTURE.md) · [SDK 参考](docs/SDK.md) · [MCP 指南](docs/MCP.md) · [内部契约](docs/CONTRACTS.md) · [对外契约](docs/CONTRACTS-SDK.md) · [发版流程](docs/RELEASE.md)

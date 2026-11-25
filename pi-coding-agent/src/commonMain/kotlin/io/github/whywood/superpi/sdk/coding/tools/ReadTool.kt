@@ -45,7 +45,7 @@ private val readParameters: JsonObject = buildJsonObject {
 
 fun readTool(cwd: Path, fs: FileSystem): CodingTool = CodingTool(
     name = "read",
-    description = "Read the contents of a file. Supports text files and images (jpg, png, gif, webp, bmp). Images are sent as attachments. For text files, output is truncated to $DEFAULT_MAX_LINES lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). Use offset/limit for large files. When you need the full file, continue with offset until complete.",
+    description = "Read the contents of a file. Supports text files and images (jpg, png, gif, webp). Images are sent as attachments. For text files, output is truncated to $DEFAULT_MAX_LINES lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). Use offset/limit for large files. When you need the full file, continue with offset until complete.",
     parameters = readParameters,
     label = "read",
     promptSnippet = "Read file contents",
@@ -57,9 +57,9 @@ fun readTool(cwd: Path, fs: FileSystem): CodingTool = CodingTool(
         val limit = args.argIntOrNull("limit")
         val absolutePath = resolveReadPath(cwd, pathInput, fs)
         val metadata = fs.metadataOrNull(absolutePath)
-            ?: throw IllegalArgumentException("ENOENT: no such file or directory, access '$absolutePath'")
+            ?: throw IllegalArgumentException("File not found: $pathInput ($absolutePath)")
         if (metadata.isDirectory) {
-            throw IllegalArgumentException("EISDIR: illegal operation on a directory, read")
+            throw IllegalArgumentException("Path is a directory, not a file: $pathInput")
         }
         signal?.throwIfAborted()
         val mimeType = detectImageMimeType(readHeadBytes(fs, absolutePath))
@@ -196,7 +196,7 @@ private fun streamTextOutput(
     return when {
         truncated && output.isEmpty() -> {
             val firstLineSize = formatSize(firstSelectedLineBytes)
-            "[Line $startLineDisplay is $firstLineSize, exceeds ${formatSize(DEFAULT_MAX_BYTES)} limit. Use bash: sed -n '${startLineDisplay}p' $pathInput | head -c $DEFAULT_MAX_BYTES]"
+            "[Line $startLineDisplay is $firstLineSize, exceeds ${formatSize(DEFAULT_MAX_BYTES)} limit. Read a smaller byte slice or inspect the line with a shell command if available.]"
         }
 
         truncated -> {
@@ -217,6 +217,8 @@ private fun streamTextOutput(
             val nextOffset = startLine + userLimitedLines + 1
             output + "\n\n[$remaining more lines in file. Use offset=$nextOffset to continue.]"
         }
+
+        totalLines == 1L && output.isEmpty() -> "(empty file)"
 
         else -> output
     }

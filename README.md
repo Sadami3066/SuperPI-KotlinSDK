@@ -9,7 +9,7 @@
 English · [简体中文](README.cn.md)
 
 [![CI](https://github.com/Sadami3066/SuperPI-KotlinSDK/actions/workflows/ci.yml/badge.svg)](https://github.com/Sadami3066/SuperPI-KotlinSDK/actions/workflows/ci.yml)
-<img src="https://img.shields.io/badge/Version-0.7.0-111111?style=flat-square" alt="Version 0.7.0" />
+<img src="https://img.shields.io/badge/Version-0.7.1-111111?style=flat-square" alt="Version 0.7.1" />
 <img src="https://img.shields.io/badge/Kotlin-2.4.21-7F52FF?style=flat-square&logo=kotlin&logoColor=white" alt="Kotlin 2.4.21" />
 <img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" alt="MIT" />
 
@@ -52,10 +52,10 @@ dependencyResolutionManagement {
 
 ```kotlin
 // build.gradle.kts (Android)
-implementation("io.github.whywood.superpi.sdk:pi-coding-agent-android:0.7.0")
+implementation("io.github.whywood.superpi.sdk:pi-coding-agent-android:0.7.1")
 
 // build.gradle.kts (JVM)
-implementation("io.github.whywood.superpi.sdk:pi-coding-agent-jvm:0.7.0")
+implementation("io.github.whywood.superpi.sdk:pi-coding-agent-jvm:0.7.1")
 ```
 
 To link against a local sibling checkout from [`SuperPI`](https://github.com/Sadami3066/SuperPI), pass `-Psuperpi.localSdk=true` (Gradle composite build) or run `./gradlew publishToMavenLocal`.
@@ -96,7 +96,7 @@ session.close()
 ```bash
 ./gradlew build --no-daemon                    # compile JVM + Android and run all tests
 ./gradlew publishAllPublicationsToPagesRepository
-./scripts/release-local.sh 0.7.0               # full verification + demos + checksum manifest
+./scripts/release-local.sh 0.7.1               # full verification + demos + checksum manifest
 ```
 
 - [Architecture](docs/ARCHITECTURE.md) · [SDK Reference](docs/SDK.md) · [MCP Guide](docs/MCP.md) · [Contracts](docs/CONTRACTS.md) · [SDK Contracts](docs/CONTRACTS-SDK.md) · [Release Guide](docs/RELEASE.md)

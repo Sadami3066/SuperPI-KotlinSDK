@@ -40,6 +40,7 @@ import io.github.whywood.superpi.sdk.coding.compaction.SummarizeRequest
 import io.github.whywood.superpi.sdk.coding.compaction.buildSessionProjection
 import io.github.whywood.superpi.sdk.coding.compaction.compact
 import io.github.whywood.superpi.sdk.coding.compaction.estimateProjectedContextTokens
+import io.github.whywood.superpi.sdk.coding.compaction.findMicroCompactionEdits
 import io.github.whywood.superpi.sdk.coding.compaction.prepareCompaction
 import io.github.whywood.superpi.sdk.coding.compaction.shouldCompact
 import io.github.whywood.superpi.sdk.coding.images.IMAGE_CONVERSION_FAILED_MESSAGE
@@ -56,6 +57,7 @@ import io.github.whywood.superpi.sdk.coding.prompt.SystemPromptSections
 import io.github.whywood.superpi.sdk.coding.prompt.buildSystemPrompt
 import io.github.whywood.superpi.sdk.coding.prompt.diffSystemPromptSections
 import io.github.whywood.superpi.sdk.coding.prompt.expandPromptTemplate
+import io.github.whywood.superpi.sdk.coding.prompt.mergeSystemPromptSections
 import io.github.whywood.superpi.sdk.coding.settings.SettingsManager
 import io.github.whywood.superpi.sdk.coding.tools.CodingTool
 import kotlinx.coroutines.CompletableDeferred
@@ -143,6 +145,7 @@ class AgentSession internal constructor(
     initialSections: SystemPromptSections,
     private val staticSystemPromptSections: Map<String, String>,
     private val scope: CoroutineScope,
+    private val compactionSettingsProvider: (() -> io.github.whywood.superpi.sdk.coding.settings.CompactionSettings)? = null,
 ) {
     private val sessionEvents = MutableSharedFlow<SessionEvent>(
         extraBufferCapacity = 256,
@@ -272,8 +275,11 @@ class AgentSession internal constructor(
         }
     }
 
+    private fun effectiveCompactionSettings(): io.github.whywood.superpi.sdk.coding.settings.CompactionSettings =
+        compactionSettingsProvider?.invoke() ?: this.settings.getCompactionSettings()
+
     private suspend fun compactInternal(customInstructions: String?, signal: RunSignal?): CompactionResult? {
-        val compactionSettings = this.settings.getCompactionSettings()
+        val compactionSettings = effectiveCompactionSettings()
         if (!compactionSettings.enabled) return null
         val branch = sessionManager.getBranch()
         val preparation = prepareCompaction(branch, compactionSettings, agent.state.model, customInstructions)
@@ -299,30 +305,63 @@ class AgentSession internal constructor(
     }
 
     private suspend fun maybeCompactBeforePrompt(signal: RunSignal) {
-        val compactionSettings = this.settings.getCompactionSettings()
+        val compactionSettings = effectiveCompactionSettings()
         if (!compactionSettings.enabled) return
         val branch = sessionManager.getBranch()
+        val contextWindow = agent.state.model.contextWindow
         val tokens = estimateProjectedContextTokens(buildSessionProjection(branch), branch).tokens
-        if (!shouldCompact(tokens, agent.state.model.contextWindow, compactionSettings)) return
-        compactInternal(null, signal)
+        if (shouldCompact(tokens, contextWindow, compactionSettings)) {
+            compactInternal(null, signal)
+            return
+        }
+        maybeMicroCompact(branch, contextWindow, tokens, compactionSettings.triggerRatio)
     }
 
     private suspend fun maybeCompactBetweenTurns(signal: RunSignal): AgentLoopTurnUpdate? {
-        val compactionSettings = settings.getCompactionSettings()
+        val compactionSettings = effectiveCompactionSettings()
         if (!compactionSettings.enabled || signal.isAborted) return null
         if (!compactingBetweenTurns.compareAndSet(false, true)) return null
         try {
             val branch = sessionManager.getBranch()
+            val contextWindow = agent.state.model.contextWindow
             val tokens = estimateProjectedContextTokens(buildSessionProjection(branch), branch).tokens
-            if (!shouldCompact(tokens, agent.state.model.contextWindow, compactionSettings)) return null
-            if (compactInternal(null, signal) == null) return null
-            if (signal.isAborted) return null
-            return AgentLoopTurnUpdate(
-                context = AgentContext(agent.state.messages.toList(), agent.state.tools.toList()),
-            )
+            if (shouldCompact(tokens, contextWindow, compactionSettings)) {
+                if (compactInternal(null, signal) == null) return null
+                if (signal.isAborted) return null
+                return AgentLoopTurnUpdate(
+                    context = AgentContext(agent.state.messages.toList(), agent.state.tools.toList()),
+                )
+            }
+            if (maybeMicroCompact(branch, contextWindow, tokens, compactionSettings.triggerRatio)) {
+                if (signal.isAborted) return null
+                return AgentLoopTurnUpdate(
+                    context = AgentContext(agent.state.messages.toList(), agent.state.tools.toList()),
+                )
+            }
+            return null
         } finally {
             compactingBetweenTurns.set(false)
         }
+    }
+
+    private suspend fun maybeMicroCompact(
+        branch: List<SessionEntry>,
+        contextWindow: Long,
+        tokens: Long,
+        triggerRatio: Double? = null,
+    ): Boolean {
+        val softRatio = if (triggerRatio != null && triggerRatio > 0.0 && triggerRatio < 1.0) {
+            minOf(0.65, (triggerRatio - 0.10).coerceAtLeast(0.40))
+        } else {
+            0.65
+        }
+        val edits = findMicroCompactionEdits(branch, contextWindow, tokens, softThresholdRatio = softRatio)
+        if (edits.isEmpty()) return false
+        for (edit in edits) {
+            sessionManager.appendContextEdit(edit.targetEntryId, ContentReplacement(PlainTextContent(edit.replacementText)))
+        }
+        rebuildContextFromSession()
+        return true
     }
 
     private suspend fun applyCompaction(result: CompactionResult) {
@@ -723,6 +762,7 @@ class AgentSession internal constructor(
     }
 
     private suspend fun buildCurrentSections(): SystemPromptSections {
+        val selectedTools = mutableTools.map { it.name }
         val base = buildSystemPrompt(
             SystemPromptInput(
                 preamble = resources.systemPromptOverride,
@@ -733,12 +773,16 @@ class AgentSession internal constructor(
                 projectInstructions = resources.contextFiles,
                 skills = resources.skills,
                 cwd = cwd,
+                selectedTools = selectedTools,
             ),
         )
         val hookExtras = hooks.extraSystemPromptSections?.invoke().orEmpty()
-        val mcpSection = mcpStatusProvider?.invoke()?.let { io.github.whywood.superpi.sdk.coding.mcp.buildMcpServersSection(it) }
+        val usesToolExecute = "tool_execute" in selectedTools
+        val mcpSection = mcpStatusProvider?.invoke()?.let {
+            io.github.whywood.superpi.sdk.coding.mcp.buildMcpServersSection(it, usesToolExecute = usesToolExecute)
+        }
         val extras = staticSystemPromptSections + hookExtras + (mcpSection?.let { mapOf("mcp_servers" to it) } ?: emptyMap())
-        return if (extras.isEmpty()) base else SystemPromptSections(base.sections + extras)
+        return mergeSystemPromptSections(base.sections, extras)
     }
 
     internal fun agentTools(): List<AgentTool> = mutableTools.map { it.asAgentTool() }

@@ -6,7 +6,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization) apply false
 }
 
-val sdkVersion: String = providers.gradleProperty("sdkVersion").getOrElse("0.7.0")
+val sdkVersion: String = providers.gradleProperty("sdkVersion").getOrElse("0.7.1")
 
 subprojects {
     group = "io.github.whywood.superpi.sdk"

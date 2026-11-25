@@ -94,7 +94,40 @@ fun contentText(content: List<Content>, separator: String = "\n"): String = cont
     .filterIsInstance<TextContent>()
     .joinToString(separator) { it.text }
 
-fun serializeConversation(messages: List<Message>): String {
+fun serializeConversation(messages: List<Message>): String =
+    buildConversationParts(messages).joinToString("\n\n")
+
+internal fun serializeConversationWithinBudget(messages: List<Message>, maxTokens: Long): String {
+    if (maxTokens <= 0L || messages.isEmpty()) return ""
+    val parts = buildConversationParts(messages).toMutableList()
+    if (parts.isEmpty()) return ""
+    var joined = parts.joinToString("\n\n")
+    if (estimateTextTokens(joined) <= maxTokens) return joined
+
+    for (index in parts.indices) {
+        if (!parts[index].startsWith("[Tool result]: ")) continue
+        val raw = parts[index].removePrefix("[Tool result]: ")
+        if (raw.length > 400) {
+            parts[index] = "[Tool result]: ${truncateForSummary(raw, 400)}"
+        }
+    }
+    joined = parts.joinToString("\n\n")
+    if (estimateTextTokens(joined) <= maxTokens) return joined
+
+    val omittedNotice = "[Earlier turns omitted to stay within summarization context budget]\n\n"
+    while (parts.size > 1 && estimateTextTokens(omittedNotice + parts.joinToString("\n\n")) > maxTokens) {
+        parts.removeAt(0)
+    }
+    joined = omittedNotice + parts.joinToString("\n\n")
+    if (estimateTextTokens(joined) <= maxTokens) return joined
+
+    val approxAsciiChars = (maxTokens * 2L).coerceAtLeast(512L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+    val tail = parts.lastOrNull().orEmpty()
+    val keep = minOf(tail.length, approxAsciiChars)
+    return omittedNotice + tail.takeLast(keep)
+}
+
+private fun buildConversationParts(messages: List<Message>): List<String> {
     val parts = mutableListOf<String>()
     for (message in messages) {
         when (message) {
@@ -131,10 +164,46 @@ fun serializeConversation(messages: List<Message>): String {
             else -> Unit
         }
     }
-    return parts.joinToString("\n\n")
+    return parts
 }
 
 internal fun jsonStringify(element: JsonElement): String = element.toString()
+
+internal class TokenCharStats(
+    var asciiChars: Long = 0L,
+    var nonAsciiChars: Long = 0L,
+) {
+    fun addText(text: String) {
+        for (char in text) {
+            if (char.code < 128) asciiChars++ else nonAsciiChars++
+        }
+    }
+
+    fun addContent(content: MessageContent) {
+        when (content) {
+            is PlainTextContent -> addText(content.text)
+            is BlockContent -> addBlocks(content.blocks)
+        }
+    }
+
+    fun addBlocks(blocks: List<Content>) {
+        for (block in blocks) {
+            when (block) {
+                is TextContent -> addText(block.text)
+                is io.github.whywood.superpi.sdk.ai.ImageContent -> asciiChars += ESTIMATED_IMAGE_CHARS
+                else -> Unit
+            }
+        }
+    }
+
+    fun estimatedTokens(): Long {
+        val asciiTokens = if (asciiChars == 0L) 0L else ceil(asciiChars / 4.0).toLong()
+        val nonAsciiTokens = if (nonAsciiChars == 0L) 0L else ceil(nonAsciiChars * 1.5).toLong()
+        return asciiTokens + nonAsciiTokens
+    }
+}
+
+internal fun estimateTextTokens(text: String): Long = TokenCharStats().apply { addText(text) }.estimatedTokens()
 
 internal fun estimateTextAndImageContentChars(content: MessageContent): Long = when (content) {
     is PlainTextContent -> content.text.length.toLong()

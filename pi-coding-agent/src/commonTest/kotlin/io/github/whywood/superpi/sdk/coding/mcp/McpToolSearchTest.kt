@@ -205,6 +205,15 @@ class McpToolSearchTest {
         }.exceptionOrNull()
         assertTrue(badLimit is IllegalArgumentException)
     }
+
+    @Test
+    fun supportsWildcardBrowseAndSubstringFallback() {
+        val browsed = searchFor(sampleCatalog(), "*", limit = 2)
+        assertEquals(listOf("read_file", "search_web"), browsed.map { it.name })
+
+        val byServer = searchFor(sampleCatalog(), "db", limit = 8)
+        assertEquals(listOf("sql_query"), byServer.map { it.name })
+    }
 }
 
 private fun AgentToolResult.text(): String =

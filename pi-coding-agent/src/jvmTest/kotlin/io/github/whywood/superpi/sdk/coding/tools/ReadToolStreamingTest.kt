@@ -71,7 +71,7 @@ class ReadToolStreamingTest {
         return when {
             truncation.truncated && truncation.text.isEmpty() -> {
                 val firstLineSize = formatSize(allLines[startLine].encodeToByteArray().size)
-                "[Line $startLineDisplay is $firstLineSize, exceeds ${formatSize(DEFAULT_MAX_BYTES)} limit. Use bash: sed -n '${startLineDisplay}p' $pathInput | head -c $DEFAULT_MAX_BYTES]"
+                "[Line $startLineDisplay is $firstLineSize, exceeds ${formatSize(DEFAULT_MAX_BYTES)} limit. Read a smaller byte slice or inspect the line with a shell command if available.]"
             }
 
             truncation.truncated -> {
@@ -92,6 +92,8 @@ class ReadToolStreamingTest {
                 val nextOffset = startLine + userLimitedLines + 1
                 truncation.text + "\n\n[$remaining more lines in file. Use offset=$nextOffset to continue.]"
             }
+
+            totalFileLines == 1 && truncation.text.isEmpty() -> "(empty file)"
 
             else -> truncation.text
         }

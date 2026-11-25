@@ -54,8 +54,7 @@ class SystemPromptTest {
         )
         assertEquals(DEFAULT_SYSTEM_PROMPT_PREAMBLE, sections.getValue("preamble"))
         assertEquals(
-            "<tools>\n- read: Read file contents\n- bash: Run a shell command\n\n" +
-                "Plugin and MCP tools are discovered with tool_search, then executed with tool_execute.\n</tools>",
+            "<tools>\n- read: Read file contents\n- bash: Run a shell command\n</tools>",
             sections.getValue("tools"),
         )
         assertEquals(
@@ -129,9 +128,12 @@ class SystemPromptTest {
     @Test
     fun `tools section falls back to none`() {
         val sections = sectionsOf(baseInput(selectedTools = listOf("read")))
+        assertEquals("<tools>\n(none)\n</tools>", sections.getValue("tools"))
+
+        val withDeferred = sectionsOf(baseInput(selectedTools = listOf("read", "tool_search", "tool_execute")))
         assertEquals(
-                "<tools>\n(none)\n\nPlugin and MCP tools are discovered with tool_search, then executed with tool_execute.\n</tools>",
-            sections.getValue("tools"),
+            "<tools>\n(none)\n\nPlugin and MCP tools are discovered with tool_search, then executed with tool_execute.\n</tools>",
+            withDeferred.getValue("tools"),
         )
     }
 
@@ -321,5 +323,15 @@ class SystemPromptTest {
         val diff = diffSystemPromptSectionMap(previous, current)
         assertEquals(mapOf("preamble" to "p2", "cwd" to "c", "skills" to null), diff)
         assertNull(diff["skills"])
+    }
+
+    @Test
+    fun `mergeSystemPromptSections removes keys mapped to empty strings`() {
+        val merged = mergeSystemPromptSections(
+            linkedMapOf("preamble" to "p", "skills" to "<skills>\nx\n</skills>"),
+            mapOf("skills" to "", "cwd" to "<cwd>\n/p\n</cwd>"),
+        )
+        assertFalse("skills" in merged.sections)
+        assertEquals("<cwd>\n/p\n</cwd>", merged["cwd"])
     }
 }
