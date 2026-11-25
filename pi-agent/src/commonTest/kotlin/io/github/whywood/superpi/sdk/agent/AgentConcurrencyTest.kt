@@ -231,11 +231,22 @@ class AgentConcurrencyTest {
                 )
 
                 val startGate = CompletableDeferred<Unit>()
+                val allLosersRejected = CompletableDeferred<Unit>()
+                var rejectedCount = 0
+                val rejectedLock = Any()
                 val results = coroutineScope {
                     val racers = List(8) { index ->
                         async {
                             startGate.await()
-                            runCatching { agent.prompt("race-$index") }
+                            val result = runCatching { agent.prompt("race-$index") }
+                            if (result.isFailure) {
+                                val done = synchronized(rejectedLock) {
+                                    rejectedCount++
+                                    rejectedCount == 7
+                                }
+                                if (done) allLosersRejected.complete(Unit)
+                            }
+                            result
                         }
                     }
                     startGate.complete(Unit)
@@ -249,6 +260,7 @@ class AgentConcurrencyTest {
                         assertFalse(agent.state.isStreaming)
                     }
 
+                    allLosersRejected.await()
                     releaseStream.complete(Unit)
                     idleWaiter.await()
                     racers.awaitAll()
